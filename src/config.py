@@ -30,9 +30,35 @@ class Settings:
         "EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
     )
 
+    # Final number of chunks handed to the LLM as context.
     retrieval_k: int = int(os.getenv("RETRIEVAL_K", "4"))
+
+    # How many candidates to pull from the vector store (by raw embedding
+    # distance) before reranking. Wider than retrieval_k on purpose — this
+    # is what lets a semantically-correct but lexically-different chunk
+    # survive long enough for the reranker to recognize it, even if the
+    # bi-encoder alone would have ranked it outside the top retrieval_k.
+    fetch_k: int = int(os.getenv("FETCH_K", "12"))
+
+    # Cross-encoder relevance gate (raw ms-marco-MiniLM-L-6-v2 logit scale,
+    # roughly -11..+11). This — not the legacy distance threshold below —
+    # is what decides whether a chunk is actually relevant.
+    rerank_score_threshold: float = float(
+        os.getenv("RERANK_SCORE_THRESHOLD", "-8.0")
+    )
+
+    # Legacy raw-L2-distance cutoff from the bi-encoder-only pipeline. No
+    # longer used to gate results (see rerank_score_threshold) — kept only
+    # so debug mode can show the old score alongside the new one.
     relevance_score_threshold: float = float(
         os.getenv("RELEVANCE_SCORE_THRESHOLD", "1.5")
+    )
+
+    debug_mode: bool = os.getenv("DEBUG_MODE", "false").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
     )
 
     docs_dir: str = os.getenv("DOCS_DIR", "./data/docs")

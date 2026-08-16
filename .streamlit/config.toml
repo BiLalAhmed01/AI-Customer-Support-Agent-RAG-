@@ -1,10 +1,28 @@
 [theme]
-base = "dark"
-primaryColor = "#7C5CFC"
-backgroundColor = "#0A0E17"
-secondaryBackgroundColor = "#121826"
-textColor = "#E8EAF2"
+# Streamlit's own native widget chrome (st.toggle's track, button focus
+# rings, spinner color) is fixed to whichever base is set here — it does
+# not follow our custom dark-mode CSS variable swap, which is applied on
+# top via inject_theme_css(). base stays "light" so native chrome doesn't
+# fight the injected dark surface colors; primaryColor/backgroundColor
+# below are Orchis's actual brand tokens so native widgets read as
+# on-brand rather than a leftover default.
+base = "light"
+primaryColor = "#B979E4"
+backgroundColor = "#FAF7FE"
+secondaryBackgroundColor = "#F3EAFB"
+textColor = "#241B36"
 font = "sans serif"
 
 [browser]
 gatherUsageStats = false
+
+[server]
+# The default file watcher re-walks every imported module's __path__ on each
+# script run to support hot-reload. transformers (pulled in by the
+# sentence-transformers reranker/embeddings) has hundreds of lazy-loaded
+# submodules that each raise and catch a harmless ModuleNotFoundError for
+# optional deps (torchvision, tensorflow) we don't use — the watcher's cost
+# to walk all of that dwarfs actual request latency and made the UI feel
+# frozen during streaming. Disabling it trades auto-reload-on-save for a
+# responsive app; restart the server manually after editing source files.
+fileWatcherType = "none"

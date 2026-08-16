@@ -19,9 +19,11 @@ from src.embeddings import get_embeddings
 SUPPORTED_EXTENSIONS = {".pdf", ".txt", ".md"}
 
 
-def load_documents(docs_dir: Path):
+def load_documents(docs_dir: Path, only_filenames: set[str] | None = None):
     documents = []
     files = [p for p in docs_dir.rglob("*") if p.suffix.lower() in SUPPORTED_EXTENSIONS]
+    if only_filenames is not None:
+        files = [p for p in files if p.name in only_filenames]
 
     if not files:
         print(f"No supported files (.pdf, .txt, .md) found in {docs_dir}")
@@ -44,13 +46,23 @@ def load_documents(docs_dir: Path):
     return documents
 
 
-def ingest(docs_dir: str, reset: bool = False) -> int:
+def ingest(docs_dir: str, reset: bool = False, only_filenames: set[str] | None = None) -> int:
+    """Load, chunk, embed, and store documents from `docs_dir`.
+
+    By default (`only_filenames=None`) this processes every supported file
+    in the directory — the right behavior for the CLI, and for `--reset`
+    rebuilds. Pass `only_filenames` to restrict ingestion to specific
+    files instead: without it, re-running this against a directory that
+    already has indexed files (e.g. after adding one new upload) would
+    re-embed and re-store every existing file too, duplicating their
+    chunks in the collection on every call.
+    """
     docs_path = Path(docs_dir)
     if not docs_path.exists():
         print(f"Docs directory does not exist: {docs_path}", file=sys.stderr)
         return 0
 
-    raw_documents = load_documents(docs_path)
+    raw_documents = load_documents(docs_path, only_filenames=only_filenames)
     if not raw_documents:
         return 0
 
@@ -77,6 +89,19 @@ def ingest(docs_dir: str, reset: bool = False) -> int:
         embedding_function=embeddings,
         persist_directory=settings.chroma_persist_dir,
     )
+
+    # Re-ingesting a filename that's already indexed (re-uploading a
+    # corrected/updated document through the Knowledge Base page is the
+    # common case) must replace its old chunks, not add alongside them —
+    # otherwise the store ends up with both the stale and the current
+    # text simultaneously retrievable, and Orchis can answer from either
+    # one depending on which chunk scores higher. only_filenames is
+    # exactly the set of sources this call is about to (re-)write, so
+    # clearing their existing chunks first is safe and specific: it never
+    # touches any other document's chunks.
+    if only_filenames:
+        vectorstore.delete(where={"source": {"$in": sorted(only_filenames)}})
+
     vectorstore.add_documents(chunks)
 
     print(

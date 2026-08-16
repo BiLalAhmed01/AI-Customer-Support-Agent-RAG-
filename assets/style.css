@@ -1,99 +1,335 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
 
+/* ============================================================
+   Orchis design tokens
+   Color tokens (--color-*, --bg, --surface, --text-primary, etc.) are NOT
+   defined here — they're injected as a :root block ahead of this
+   stylesheet by src/branding.py's inject_theme_css(), one of two
+   intentionally-designed palettes (light/dark) built off the fixed
+   forest/lilac/eggplant/mint/emerald brand colors. See that file's module
+   docstring for the contrast rationale behind each derived token.
+   Only theme-independent structural/typography tokens live in this file.
+   ============================================================ */
 :root {
-  --bg-0: #0A0E17;
-  --bg-1: #0D1220;
-  --panel: rgba(255, 255, 255, 0.04);
-  --panel-border: rgba(255, 255, 255, 0.08);
-  --accent-1: #7C5CFC;
-  --accent-2: #4F8BFF;
-  --accent-3: #38E8C6;
-  --text-hi: #F2F3F9;
-  --text-lo: #9AA3B8;
-  --glow: 0 4px 30px rgba(124, 92, 252, 0.25);
+  --radius: 14px;
+  --radius-sm: 9px;
+  --radius-lg: 20px;
+
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-heading: 'Space Grotesk', sans-serif;
+  --font-mono: 'SF Mono', 'Cascadia Code', Consolas, 'Roboto Mono', monospace;
+
+  /* Type scale: 12 / 14 / 16 / 20 / 24 / 32, consistent line-height and
+     tighter tracking as size increases — applied to the primary
+     hierarchy (brand wordmark, page titles, section headings, stat
+     numerals), not a blanket rewrite of every micro-label in the app. */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 2rem;
+  --leading-tight: 1.2;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.6;
+  --tracking-tight: -0.02em;
+  --tracking-snug: -0.01em;
+
+  /* Motion: 150-250ms, transform/opacity only (never width/height/top/
+     left — that forces layout on every frame instead of just compositing
+     a GPU layer, which is the single most common source of animation
+     jank). Every animation and transition in this file is built from
+     these two durations/eases. */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-slow: 250ms;
 }
 
 html, body, [class*="css"] {
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: var(--font-sans);
+  color: var(--text-primary);
 }
 
-/* ---------- Ambient animated background ---------- */
+/* Smooth, deliberate theme switching — not an abrupt color-snap. */
+html {
+  transition: background-color var(--duration-slow) var(--ease-out);
+}
+body, .stApp, [data-testid="stSidebar"], .msg-bubble, .status-card,
+[data-testid="stChatInput"] textarea, .doc-card, .kb-stat {
+  transition: background-color var(--duration-base) var(--ease-out),
+              border-color var(--duration-base) var(--ease-out),
+              color var(--duration-base) var(--ease-out);
+}
+
+/* Guards against horizontal scroll: any single overlong token (a raw URL,
+   an un-spaced ID) in a streamed response is the most common cause on
+   narrow viewports, so wrapping is opt-out everywhere, not per-element. */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  overflow-x: hidden;
+}
+
+/* ---------- App shell ---------- */
 .stApp {
-  background:
-    radial-gradient(circle at 15% 10%, rgba(124, 92, 252, 0.16) 0%, transparent 45%),
-    radial-gradient(circle at 85% 15%, rgba(79, 139, 255, 0.14) 0%, transparent 45%),
-    radial-gradient(circle at 50% 90%, rgba(56, 232, 198, 0.08) 0%, transparent 50%),
-    linear-gradient(180deg, var(--bg-0) 0%, var(--bg-1) 100%);
-  background-attachment: fixed;
-  animation: drift 22s ease-in-out infinite alternate;
-}
-
-@keyframes drift {
-  0%   { background-position: 0% 0%, 100% 0%, 50% 100%, 0 0; }
-  100% { background-position: 8% 4%, 92% 6%, 55% 92%, 0 0; }
+  background: var(--bg);
+  overflow-x: hidden;
 }
 
 header[data-testid="stHeader"] {
-  background: transparent;
+  background: var(--bg);
 }
 
 #MainMenu, footer { visibility: hidden; }
 
-/* ---------- Hero header ---------- */
-.hero { padding: 8px 0 18px 0; }
+.block-container {
+  padding-top: 1.5rem;
+  padding-bottom: 6rem;
+  max-width: 760px;
+}
 
-.hero-badge {
+/* ---------- Focus states (keyboard accessibility) ---------- */
+button:focus-visible,
+[data-testid="stChatInput"] textarea:focus-visible,
+[data-testid="stSidebarNav"] a:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent-strong) !important;
+  outline-offset: 2px !important;
+}
+
+/* ---------- Motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ---------- Brand mark (header / sidebar / avatar) ---------- */
+.orchis-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.orchis-mark-img { display: block; border-radius: 50%; }
+
+.page-header {
+  padding: 4px 0 2px 0;
+}
+
+.page-header-title {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--text-lg);
+  color: var(--text-primary);
+  letter-spacing: var(--tracking-snug);
+  line-height: var(--leading-tight);
+}
+
+.page-header-subtitle {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+.page-header-right {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.page-header-rule {
+  border-bottom: 1px solid var(--border);
+  margin: 14px 0 26px 0;
+}
+
+/* ---------- Status pill ("AI ONLINE") ---------- */
+.status-pill {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 0.72rem;
-  letter-spacing: 0.12em;
+  gap: 7px;
+  font-size: var(--text-xs);
   font-weight: 600;
-  color: var(--accent-3);
-  background: rgba(56, 232, 198, 0.08);
-  border: 1px solid rgba(56, 232, 198, 0.25);
-  padding: 5px 12px;
+  color: var(--text-secondary);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 5px 11px;
   border-radius: 999px;
-  margin-bottom: 14px;
 }
 
-.hero-badge .dot {
-  width: 7px;
-  height: 7px;
+/* Pulsing status dot: a static core dot plus an expanding, fading ring on
+   a ::after pseudo-element — transform (scale) + opacity only, so this
+   composites on the GPU with no layout/paint cost per frame regardless
+   of how many status pills are on screen. */
+.status-pill .dot,
+.sidebar-footer-status .dot {
+  position: relative;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: var(--accent-3);
-  box-shadow: 0 0 8px var(--accent-3);
-  animation: pulse 1.8s ease-in-out infinite;
+  background: var(--status-online);
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.4; transform: scale(0.75); }
+.status-pill .dot::after,
+.sidebar-footer-status .dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--status-online);
+  animation: status-ping 2.2s var(--ease-out) infinite;
+  will-change: transform, opacity;
 }
 
-.hero-title {
-  font-family: 'Space Grotesk', sans-serif;
-  font-weight: 700;
-  font-size: 2.4rem;
-  letter-spacing: -0.02em;
-  margin: 0 0 4px 0;
-  line-height: 1.1;
-  background: linear-gradient(90deg, #FFFFFF 0%, #C8BFFF 45%, var(--accent-2) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  text-shadow: 0 0 40px rgba(124, 92, 252, 0.35);
+@keyframes status-ping {
+  0% { transform: scale(1); opacity: 0.55; }
+  75%, 100% { transform: scale(3.2); opacity: 0; }
 }
 
-.hero-sub {
-  color: var(--text-lo);
-  font-size: 0.95rem;
+/* ---------- Empty state ---------- */
+.empty-state {
+  text-align: center;
+  padding: 56px 12px 30px 12px;
+}
+
+/* The one hero visual moment in the app — a slow, subtle "breathing"
+   glow, kept deliberately calm (no spin, no color cycling, no neon).
+   The glow is a separate ::after layer whose *opacity* animates (not its
+   box-shadow value directly), and the mark itself only ever scales via
+   transform — both GPU-only properties. */
+.empty-state .orchis-hero {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  margin: 0 auto 22px auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: hero-breathe 4s var(--ease-out) infinite;
+}
+
+.empty-state .orchis-hero::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 8px var(--accent-tint), 0 10px 28px var(--shadow-color, rgba(61, 50, 91, 0.25));
+  opacity: 0.7;
+  animation: hero-glow 4s var(--ease-out) infinite;
+}
+
+.empty-state .orchis-hero-img { display: block; width: 100%; height: 100%; border-radius: 50%; position: relative; z-index: 1; }
+
+@keyframes hero-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.035); }
+}
+
+@keyframes hero-glow {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+.empty-state .empty-brand {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--text-xl);
+  letter-spacing: 0;
+  color: var(--text-primary);
+  line-height: var(--leading-tight);
+}
+
+.empty-state .empty-tagline {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--text-tertiary);
+  letter-spacing: 0.03em;
+  margin: 2px 0 26px 0;
+}
+
+.empty-state h2 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 1.15rem;
+  color: var(--text-secondary);
   margin: 0;
 }
 
+/* Suggestion chips — pill-shaped, centered, quiet by default. Streamlit
+   renders each as its own button; styled here to read as a chip rather
+   than a form control. */
+.suggestion-row {
+  margin-top: 30px;
+}
+
+.suggestion-row div[data-testid="stButton"] button {
+  background: var(--surface) !important;
+  color: var(--text-secondary) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 999px !important;
+  font-weight: 500 !important;
+  font-size: 0.84rem !important;
+  box-shadow: none !important;
+  padding: 11px 18px !important;
+  text-align: center !important;
+  transition: border-color var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out),
+              transform var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.suggestion-row div[data-testid="stButton"] button:hover {
+  border-color: var(--accent) !important;
+  color: var(--accent-strong) !important;
+  box-shadow: var(--shadow-sm) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* ---------- Knowledge-base status card ---------- */
+.kb-status-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.kb-status-card.warn {
+  border-color: var(--status-warn);
+  background: var(--status-warn-bg);
+  color: var(--status-warn);
+}
+
+.kb-status-card .kb-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--status-online);
+  flex-shrink: 0;
+}
+
+.kb-status-card.warn .kb-dot { background: var(--status-warn); }
+
 /* ---------- Chat bubbles ---------- */
-.msg-row { display: flex; margin: 14px 0; animation: rise 0.28s ease; }
+.msg-row { display: flex; margin: 18px 0; animation: rise var(--duration-slow) var(--ease-out); }
 .msg-row.user { justify-content: flex-end; }
 .msg-row.assistant { justify-content: flex-start; }
 
@@ -103,161 +339,1152 @@ header[data-testid="stHeader"] {
 }
 
 .msg-bubble {
-  max-width: 78%;
+  max-width: 74%;
   padding: 13px 17px;
-  border-radius: 18px;
-  line-height: 1.55;
-  font-size: 0.96rem;
+  border-radius: var(--radius);
+  line-height: var(--leading-relaxed);
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
+/* User bubble: a genuine gradient fill in the brand accent, with a
+   contrast-checked dark text color (5.29:1 on the mid-gradient stop —
+   see src/branding.py's accent-on-accent token) rather than the low-
+   contrast white-on-lilac pairing that fails AA. */
 .msg-row.user .msg-bubble {
-  background: linear-gradient(135deg, var(--accent-1) 0%, var(--accent-2) 100%);
-  color: #fff;
+  background: linear-gradient(135deg, var(--color-lilac) 0%, var(--accent-strong) 100%);
+  color: var(--accent-on-accent);
   border-bottom-right-radius: 4px;
-  box-shadow: var(--glow);
+  box-shadow: var(--shadow-sm);
 }
 
+/* AI bubble: a layered glass surface — translucent elevated background +
+   backdrop-blur + a hairline border in the accent color at low opacity,
+   instead of a flat card. */
 .msg-row.assistant .msg-bubble {
-  background: var(--panel);
-  border: 1px solid var(--panel-border);
+  background: color-mix(in srgb, var(--surface-elevated) 82%, transparent);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  color: var(--text-hi);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
   border-bottom-left-radius: 4px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-sm);
+}
+
+.msg-bubble.error {
+  border-left: 3px solid var(--status-error);
+}
+
+.msg-bubble .error-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--status-error);
+  margin-bottom: 4px;
+  letter-spacing: 0.02em;
 }
 
 .avatar {
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
+  width: 26px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
   flex-shrink: 0;
   margin-top: 2px;
 }
 
+.avatar .orchis-mark-img { display: block; }
+
 .msg-row.assistant .avatar {
-  background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
   margin-right: 10px;
-  box-shadow: 0 0 14px rgba(124, 92, 252, 0.4);
 }
 
-.msg-inner { display: flex; align-items: flex-start; }
+.msg-inner { display: flex; align-items: flex-start; min-width: 0; }
+.msg-inner .msg-col { display: flex; flex-direction: column; max-width: 74%; min-width: 0; }
+.msg-inner .msg-bubble { max-width: 100%; }
+.msg-row { min-width: 0; }
+.msg-row.assistant { max-width: 100%; }
 
-.sources-row { margin-top: 10px; }
+/* ---------- Accordion motion (shared by Sources + RAG trace) ----------
+   Native <details>/<summary> stay the toggle mechanism — keyboard- and
+   screen-reader-accessible with zero JS, no Streamlit rerun needed. But
+   the browser's own open/close is an instant display:none <-> block
+   snap, which is exactly the kind of un-animated state change that reads
+   as "laggy" even though nothing is actually slow. The fix is a CSS-only
+   height animation (no Framer Motion/JS needed): the child that would
+   normally be display:none when closed is instead always laid out as a
+   grid row that animates between 0fr and 1fr, clipped by overflow:hidden
+   on an inner wrapper. Both grid-template-rows and the summary caret
+   rotation are the only non-opacity/transform properties animated here,
+   and both are still layout-cheap (row-track sizing, not per-element
+   width/height) — everything else in this file sticks to transform/
+   opacity exactly as the rest of the design system does. */
+.accordion-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--duration-base) var(--ease-out);
+}
 
-.source-pill {
-  display: inline-block;
-  font-size: 0.70rem;
-  font-weight: 500;
-  padding: 3px 10px;
-  margin: 3px 5px 0 0;
+details[open] > .accordion-body {
+  grid-template-rows: 1fr;
+  transition-timing-function: var(--ease-out);
+}
+
+.accordion-body-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ---------- Source citations (compact, expandable) ---------- */
+.sources-toggle {
+  margin-top: 10px;
+}
+
+.sources-toggle summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--accent-strong);
+  padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(124, 92, 252, 0.14);
-  color: #C9BEFF;
-  border: 1px solid rgba(124, 92, 252, 0.3);
+  background: var(--accent-tint);
+  border: 1px solid var(--accent-tint-strong);
+  transition: background-color var(--duration-fast) var(--ease-out);
+  -webkit-tap-highlight-color: transparent;
 }
 
+.sources-toggle summary::-webkit-details-marker { display: none; }
+
+.sources-toggle summary::before {
+  content: "▸";
+  font-size: 0.65rem;
+  transition: transform var(--duration-fast) var(--ease-out);
+  display: inline-block;
+}
+
+.sources-toggle[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.sources-toggle summary:hover {
+  background: var(--accent-tint-strong);
+}
+
+.sources-list {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--surface-elevated) 70%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.sources-list .source-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+}
+
+.sources-list .source-item .doc-icon-tiny {
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.sources-list .source-item .source-score {
+  margin-left: auto;
+  font-size: 0.7rem;
+  color: var(--text-tertiary);
+  font-family: var(--font-heading);
+}
+
+/* ---------- RAG transparency panel ---------- */
+.rag-trace {
+  margin-top: 8px;
+}
+
+.rag-trace summary {
+  list-style: none;
+  cursor: pointer;
+  font-size: 0.74rem;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  padding: 4px 2px;
+  -webkit-tap-highlight-color: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rag-trace summary:hover { color: var(--text-secondary); }
+.rag-trace summary::-webkit-details-marker { display: none; }
+.rag-trace summary::before {
+  content: "▸";
+  font-size: 0.65rem;
+  display: inline-block;
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+.rag-trace[open] summary::before { transform: rotate(90deg); }
+
+.rag-pipeline {
+  margin-top: 10px;
+  padding: 14px 16px;
+  background: color-mix(in srgb, var(--surface-elevated) 65%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.rag-pipeline .rag-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.rag-pipeline .rag-step .rag-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+.rag-pipeline .rag-step.skipped {
+  color: var(--text-tertiary);
+  opacity: 0.7;
+}
+
+.rag-pipeline .rag-step.skipped .rag-dot {
+  background: var(--border-strong);
+}
+
+.rag-pipeline .rag-arrow {
+  padding-left: 3px;
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.rag-pipeline .rag-chunk {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.78rem;
+}
+
+.rag-pipeline .rag-chunk .rag-chunk-head {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 3px;
+}
+
+.rag-pipeline .rag-chunk .rag-chunk-score {
+  font-family: var(--font-mono);
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
+.rag-pipeline .rag-chunk .rag-chunk-preview {
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* ---------- Message actions (Regenerate / thumbs) ---------- */
+/* Streamlit's own st.button (Regenerate/thumbs) shares the pill styling
+   in the "Buttons (generic)" section below via the real kind="secondary"/
+   kind="primary" attribute Streamlit sets — kind="primary" doubles as
+   the "selected" feedback state (a filled pill, not a swapped emoji), so
+   this is one consistent button system rather than a second one bolted
+   on just for this row. .msg-actions below is the manually-rendered
+   Copy button (raw HTML, not a Streamlit widget), styled separately
+   since it isn't a real <button data-testid="stButton"> at all. */
+.msg-actions {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.msg-actions button:hover {
+  color: var(--accent-strong);
+  background: var(--surface-tint);
+}
+
+.msg-actions button.active {
+  color: var(--accent-strong);
+  background: var(--accent-tint);
+}
+
+/* ---------- Typing / loading state ---------- */
 .typing-dots { display: inline-flex; gap: 4px; padding: 4px 0; }
 .typing-dots span {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--accent-2);
-  animation: bounce 1.2s infinite ease-in-out;
+  background: var(--accent);
+  animation: bounce 1.2s infinite var(--ease-out);
+  will-change: transform, opacity;
 }
 .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
 .typing-dots span:nth-child(3) { animation-delay: 0.3s; }
 
 @keyframes bounce {
-  0%, 80%, 100% { transform: translateY(0); opacity: 0.5; }
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.45; }
   40% { transform: translateY(-5px); opacity: 1; }
 }
 
-/* ---------- Chat input ---------- */
+/* ---------- Chat composer ---------- */
+[data-testid="stBottom"],
+[data-testid="stBottom"] > div,
+[data-testid="stBottomBlockContainer"] {
+  background: var(--bg) !important;
+}
+
+/* The textarea is the only surface that should be visible — everything
+   around it (the widget's own outer wrapper, and every div nested inside
+   it) is reset to transparent/borderless/shadowless first, so nothing
+   from Streamlit's native theme (.streamlit/config.toml's
+   secondaryBackgroundColor, still used for chrome this stylesheet
+   doesn't reach) can show through as a mismatched box or seam around the
+   textarea's own border. */
 [data-testid="stChatInput"] {
-  border-radius: 16px;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 14px;
+}
+
+[data-testid="stChatInput"] div {
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 [data-testid="stChatInput"] textarea {
-  background: var(--panel) !important;
-  border: 1px solid var(--panel-border) !important;
-  border-radius: 16px !important;
-  color: var(--text-hi) !important;
-  backdrop-filter: blur(14px);
+  background: var(--surface) !important;
+  border: 1px solid var(--border-strong) !important;
+  border-radius: 14px !important;
+  color: var(--text-primary) !important;
+  font-size: 0.92rem !important;
+  padding: 12px 46px 12px 16px !important;
+  transition: border-color var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out);
+}
+
+[data-testid="stChatInput"] textarea::placeholder {
+  color: var(--text-tertiary) !important;
 }
 
 [data-testid="stChatInput"]:focus-within textarea {
-  border-color: rgba(124, 92, 252, 0.55) !important;
-  box-shadow: 0 0 0 3px rgba(124, 92, 252, 0.18) !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--focus-ring) !important;
+}
+
+[data-testid="stChatInput"] textarea:disabled {
+  background: var(--surface-tint) !important;
+  color: var(--text-tertiary) !important;
+  cursor: not-allowed;
+}
+
+/* The built-in send button (Streamlit's own submit icon) — recolor to
+   the accent so it reads as the primary action, with a smooth opacity
+   fade between enabled/disabled instead of the browser's abrupt default
+   swap. There's no separate "generating" state to style here: the
+   in-progress indicator is the processing chat bubble below (an honest
+   reflection of the actual pipeline stage), not a second, disconnected
+   spinner on the composer itself. */
+[data-testid="stChatInput"] button {
+  background: transparent !important;
+  transition: opacity var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
+}
+
+/* `color` alone only recolors an SVG whose paths use fill="currentColor" —
+   Streamlit's icon doesn't reliably do that, so `fill` is set directly on
+   the svg and every path/circle/etc. inside it as well, overriding
+   whatever fill color shipped on the individual path elements. */
+[data-testid="stChatInput"] button:not(:disabled) svg,
+[data-testid="stChatInput"] button:not(:disabled) svg * {
+  color: var(--accent-strong);
+  fill: var(--accent-strong) !important;
+}
+
+[data-testid="stChatInput"] button:disabled {
+  opacity: 0.4;
+}
+
+/* ---------- Processing states (real pipeline stages, not decoration) ---------- */
+.msg-bubble.processing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-style: normal;
+}
+
+.processing-icon {
+  display: inline-block;
+  color: var(--accent);
+  animation: processing-pulse 1.6s var(--ease-out) infinite;
+  will-change: opacity;
+}
+
+@keyframes processing-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
 }
 
 /* ---------- Sidebar ---------- */
 [data-testid="stSidebar"] {
-  background: rgba(10, 14, 23, 0.85);
-  border-right: 1px solid var(--panel-border);
+  background: var(--surface-forest, var(--surface));
+  border-right: 1px solid var(--border);
 }
 
-[data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
-  font-family: 'Space Grotesk', sans-serif;
+[data-testid="stSidebar"] > div {
+  padding-top: 1.5rem;
+}
+
+/* Wordmark: fixed-size, non-shrinking mark + a text column that owns its
+   own width and clips gracefully — the previous overlap/clip bug came
+   from the mark being an inline <svg> with no explicit box (so its
+   intrinsic size could fight the flex layout) and the text column having
+   no min-width:0, which in a flex row means "never shrink below content
+   size," letting a long line push past the sidebar edge instead of
+   wrapping/eliding. Both are pinned down explicitly here. */
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 22px;
+  min-width: 0;
+}
+
+.sidebar-brand .orchis-mark {
+  flex-shrink: 0;
+}
+
+.sidebar-brand .brand-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.sidebar-brand .brand-name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.2rem;
+  color: var(--text-primary);
+  letter-spacing: 0;
+  line-height: var(--leading-tight);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-brand .brand-tagline {
+  font-size: 0.68rem;
+  color: var(--text-tertiary);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+.sidebar-status {
+  margin-bottom: 22px;
+}
+
+.sidebar-section-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 18px 0 8px 0;
+}
+
+.sidebar-divider {
+  border-top: 1px solid var(--border);
+  margin: 14px 0 4px 0;
 }
 
 .status-card {
-  background: var(--panel);
-  border: 1px solid var(--panel-border);
-  border-radius: 14px;
-  padding: 14px 16px;
-  margin-bottom: 14px;
+  background: var(--surface-tint);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
 }
 
 .status-card .label {
   font-size: 0.68rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-lo);
-  margin-bottom: 4px;
+  color: var(--text-tertiary);
+  margin-bottom: 3px;
+  font-weight: 500;
 }
 
 .status-card .value {
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 1.05rem;
+  font-family: var(--font-heading);
+  font-size: 0.98rem;
   font-weight: 600;
-  color: var(--text-hi);
+  color: var(--text-primary);
 }
 
-.status-card .value .accent { color: var(--accent-3); }
+.status-card .value .accent { color: var(--accent-strong); }
 
+.sidebar-note {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  margin: 4px 0 18px 0;
+}
+
+/* ---------- Sidebar navigation ---------- */
+.nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.nav-link,
+[data-testid="stPageLink"] {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.86rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+  transition: background-color var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
+}
+
+[data-testid="stPageLink"] p,
+[data-testid="stPageLink"] [data-testid="stMarkdownContainer"] {
+  font-size: 0.86rem !important;
+  color: var(--text-secondary) !important;
+}
+
+[data-testid="stPageLink-NavLink"] {
+  color: var(--text-secondary) !important;
+  text-decoration: none !important;
+}
+
+.nav-link:hover,
+[data-testid="stPageLink"]:hover,
+[data-testid="stPageLink"]:hover [data-testid="stPageLink-NavLink"],
+[data-testid="stPageLink"]:hover [data-testid="stPageLink-NavLink"] p {
+  background: var(--surface-tint);
+  color: var(--text-primary) !important;
+}
+
+.nav-link.active {
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+  font-weight: 600;
+  position: relative;
+}
+
+/* Active-item indicator bar — a small, clear "you are here" marker in
+   the accent color, echoing the pattern from Linear/Vercel-style nav
+   rails rather than relying on background tint alone. */
+.nav-link.active::before {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.sidebar-section-label:first-of-type { margin-top: 6px; }
+
+/* ---------- Compact knowledge-base status (sidebar) ---------- */
+.kb-mini-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  padding: 4px 2px 14px 2px;
+}
+
+.kb-mini-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--status-online);
+  box-shadow: 0 0 0 3px var(--status-online-ring);
+  flex-shrink: 0;
+}
+
+.kb-mini-status.warn .kb-mini-dot {
+  background: var(--status-warn);
+  box-shadow: none;
+}
+
+[data-testid="stSidebarUserContent"] {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 3rem);
+}
+
+.sidebar-spacer { flex: 1 1 auto; }
+
+.sidebar-footer {
+  font-size: 0.72rem;
+  color: var(--text-tertiary);
+  margin-top: 24px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.sidebar-footer-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--status-online-text, var(--status-online));
+  letter-spacing: 0.02em;
+}
+
+.sidebar-footer-model {
+  margin-top: 4px;
+  color: var(--text-tertiary);
+}
+
+/* ---------- Buttons (generic) ---------- */
+/* One consistent pill-button system for every st.button in the app —
+   Regenerate/thumbs, Knowledge Base actions, suggestion chips (further
+   overridden below for their centered full-width look) all share it, so
+   there's a single button language instead of several near-identical
+   ones. kind="primary" (New Chat, and the active thumbs-feedback state)
+   is the one visually "selected/confident" variant. */
 div[data-testid="stButton"] button {
-  background: linear-gradient(135deg, var(--accent-1), var(--accent-2)) !important;
-  color: #fff !important;
-  border: none !important;
-  border-radius: 12px !important;
-  font-weight: 600 !important;
-  box-shadow: 0 4px 18px rgba(124, 92, 252, 0.3);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  background: var(--surface) !important;
+  color: var(--text-secondary) !important;
+  border: 1px solid var(--border-strong) !important;
+  border-radius: 999px !important;
+  font-weight: 500 !important;
+  font-size: 0.85rem !important;
+  box-shadow: none !important;
+  transition: border-color var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out),
+              background-color var(--duration-fast) var(--ease-out),
+              transform var(--duration-fast) var(--ease-out);
 }
 
 div[data-testid="stButton"] button:hover {
+  border-color: var(--accent) !important;
+  color: var(--accent-strong) !important;
   transform: translateY(-1px);
-  box-shadow: 0 6px 22px rgba(124, 92, 252, 0.45);
 }
 
-/* ---------- Alerts ---------- */
+div[data-testid="stButton"] button:active {
+  transform: translateY(0);
+}
+
+.suggestion-row div[data-testid="stButton"] button:active {
+  transform: translateY(0);
+  box-shadow: none !important;
+}
+
+/* New Chat's accent CTA, and — reusing the same "this is the confirmed/
+   selected state" semantic — the active Helpful/Not-helpful thumbs. */
+button[kind="primary"] {
+  background: var(--accent) !important;
+  color: var(--accent-on-accent) !important;
+  border: 1px solid var(--accent) !important;
+}
+
+button[kind="primary"]:hover {
+  filter: brightness(1.08);
+  border-color: var(--accent) !important;
+  color: var(--accent-on-accent) !important;
+  transform: translateY(-1px);
+}
+
+/* ---------- Theme toggle (sliding switch) ---------- */
+/* Built on st.toggle rather than a hand-rolled switch — BaseWeb's toggle
+   already ships a real transform-based sliding thumb; this just recolors
+   its track/thumb to the brand palette instead of reimplementing the
+   slide animation from scratch. */
+.theme-icon {
+  font-size: 0.85rem;
+  color: var(--text-tertiary);
+  display: block;
+  text-align: center;
+  line-height: 1;
+}
+
+[data-testid="stToggle"] {
+  display: flex;
+  justify-content: center;
+}
+
+[data-testid="stToggle"] label {
+  gap: 0 !important;
+}
+
+[data-testid="stToggle"] div[data-baseweb="checkbox"] {
+  transition: background-color var(--duration-base) var(--ease-out);
+}
+
+/* BaseWeb renders the track as the checkbox root's direct div and the
+   thumb as a nested span; both already transition via BaseWeb's own
+   inline transform styles — only the color tokens need overriding here. */
+[data-testid="stToggle"] div[role="checkbox"] {
+  background: var(--border-strong) !important;
+}
+
+[data-testid="stToggle"] div[role="checkbox"][aria-checked="true"] {
+  background: var(--accent) !important;
+}
+
+[data-testid="stToggle"] div[role="checkbox"] > div {
+  background: var(--surface-elevated) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+/* ---------- Alerts (Streamlit native) ---------- */
 [data-testid="stAlert"] {
-  background: var(--panel) !important;
-  border: 1px solid var(--panel-border) !important;
-  border-radius: 14px !important;
-  backdrop-filter: blur(14px);
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  color: var(--text-secondary) !important;
+}
+
+/* ---------- Dev-only debug panel — console/code styling ---------- */
+[data-testid="stExpander"] {
+  border: 1px solid var(--border) !important;
+  border-radius: 12px !important;
+  background: var(--surface, #000) !important;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.12) !important;
+}
+
+[data-testid="stExpander"] summary {
+  font-family: var(--font-mono) !important;
+  font-size: 0.78rem !important;
+}
+
+[data-testid="stExpander"] [data-testid="stExpanderDetails"] {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  background: color-mix(in srgb, var(--bg) 55%, black 10%);
+  border-radius: 0 0 11px 11px;
+  padding: 4px 6px;
+}
+
+[data-testid="stExpander"] [data-testid="stExpanderDetails"] p,
+[data-testid="stExpander"] [data-testid="stExpanderDetails"] code {
+  font-family: var(--font-mono) !important;
+  font-size: 0.8rem !important;
+}
+
+[data-testid="stExpander"] [data-testid="stExpanderDetails"] code {
+  color: var(--accent-strong) !important;
+  background: transparent !important;
 }
 
 /* ---------- Scrollbar ---------- */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(124, 92, 252, 0.35);
+  background: var(--border-strong);
   border-radius: 8px;
 }
-::-webkit-scrollbar-thumb:hover { background: rgba(124, 92, 252, 0.55); }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+[data-testid="stSidebarNav"] {
+  display: none;
+}
+
+/* ============================================================
+   Knowledge Base page
+   ============================================================ */
+
+.kb-stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 24px 0 30px 0;
+}
+
+.kb-stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+}
+
+.kb-stat .kb-stat-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+
+.kb-stat .kb-stat-value {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--text-lg);
+  color: var(--text-primary);
+}
+
+.section-heading {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  margin: 30px 0 12px 0;
+}
+
+/* Document cards */
+.doc-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-bottom: 10px;
+}
+
+.doc-card .doc-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.doc-card .doc-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--surface-tint);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-heading);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--accent-strong);
+  flex-shrink: 0;
+}
+
+.doc-card .doc-info { min-width: 0; }
+
+.doc-card .doc-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.doc-card .doc-meta {
+  font-size: 0.76rem;
+  color: var(--text-tertiary);
+  margin-top: 1px;
+}
+
+.doc-card .doc-side {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.doc-card .doc-chunks {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.doc-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 4px 11px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.doc-status.indexed {
+  color: var(--status-online-text, var(--status-online));
+  background: var(--status-online-bg);
+}
+
+.doc-status.processing {
+  color: var(--status-warn);
+  background: var(--status-warn-bg);
+}
+
+.doc-status.failed {
+  color: var(--status-error);
+  background: var(--status-error-bg);
+}
+
+.doc-error-detail {
+  font-size: 0.76rem;
+  color: var(--status-error);
+  margin: -4px 0 10px 4px;
+  padding-left: 46px;
+}
+
+/* Empty state (no documents at all) */
+.kb-empty {
+  text-align: center;
+  padding: 50px 12px 40px 12px;
+  background: var(--surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  margin: 24px 0;
+}
+
+.kb-empty .kb-empty-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background: var(--accent-tint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--accent-strong);
+  margin: 0 auto 16px auto;
+}
+
+.kb-empty h3 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--text-primary);
+  margin: 0 0 6px 0;
+}
+
+.kb-empty p {
+  font-size: 0.86rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.dashboard-note {
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+  line-height: 1.6;
+  margin: 10px 2px 0 2px;
+}
+
+/* Add Knowledge Source panel */
+.upload-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  margin-top: 8px;
+}
+
+.upload-panel .upload-hint {
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+  margin-top: 8px;
+}
+
+[data-testid="stFileUploader"] section {
+  background: var(--surface-tint) !important;
+  border: 1px dashed var(--border-strong) !important;
+  border-radius: 12px !important;
+}
+
+/* ============================================================
+   Responsive — tablet and down (≤768px)
+   ============================================================ */
+@media (max-width: 768px) {
+  [data-testid="stSidebar"] {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    z-index: 999;
+    box-shadow: var(--shadow-md);
+    transition: transform var(--duration-slow) var(--ease-out);
+  }
+
+  [data-testid="stSidebar"][aria-expanded="false"] {
+    transform: translateX(-100%);
+  }
+
+  .block-container {
+    padding-top: 1rem;
+    padding-bottom: 6.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .msg-bubble,
+  .msg-inner .msg-col {
+    max-width: 86%;
+  }
+
+  .kb-stat-row {
+    gap: 10px;
+  }
+
+  .kb-stat {
+    padding: 14px 14px;
+  }
+
+  .kb-stat .kb-stat-value {
+    font-size: 1.3rem;
+  }
+
+  [data-testid="stHorizontalBlock"] {
+    flex-wrap: wrap !important;
+  }
+
+  [data-testid="stHorizontalBlock"] [data-testid="column"] {
+    min-width: 45% !important;
+  }
+}
+
+/* ============================================================
+   Responsive — phones (≤480px)
+   ============================================================ */
+@media (max-width: 480px) {
+  .block-container {
+    padding-top: 0.85rem;
+    padding-bottom: 7rem;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .page-header-title {
+    font-size: 1.1rem;
+  }
+
+  .page-header-rule {
+    margin: 10px 0 18px 0;
+  }
+
+  .status-pill {
+    font-size: 0.64rem;
+    padding: 4px 8px;
+  }
+
+  .empty-state {
+    padding: 40px 4px 20px 4px;
+  }
+
+  .empty-state .orchis-hero {
+    width: 60px;
+    height: 60px;
+  }
+
+  .empty-state .empty-brand {
+    font-size: 1.2rem;
+  }
+
+  .empty-state h2 {
+    font-size: 1.02rem;
+  }
+
+  .suggestion-row div[data-testid="stButton"] button,
+  div[data-testid="stButton"] button {
+    min-height: 44px;
+  }
+
+  .msg-bubble,
+  .msg-inner .msg-col {
+    max-width: 92%;
+  }
+
+  .msg-bubble {
+    padding: 11px 14px;
+    font-size: 0.92rem;
+  }
+
+  .avatar {
+    width: 22px;
+    height: 22px;
+  }
+
+  .msg-row.assistant .avatar {
+    margin-right: 8px;
+  }
+
+  .msg-actions {
+    margin-left: 30px !important;
+  }
+
+  [data-testid="stChatInput"] textarea {
+    font-size: 16px !important;
+  }
+
+  .kb-stat-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .kb-stat {
+    padding: 12px 12px;
+  }
+
+  .doc-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .doc-card .doc-side {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .doc-error-detail {
+    padding-left: 0;
+  }
+
+  .upload-panel {
+    padding: 16px 14px;
+  }
+
+  .kb-empty {
+    padding: 36px 10px 30px 10px;
+  }
+}
