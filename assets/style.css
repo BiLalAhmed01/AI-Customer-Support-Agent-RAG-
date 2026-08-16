@@ -795,8 +795,19 @@ details[open] > .accordion-body {
   box-shadow: var(--shadow-raised);
 }
 
+/* Streamlit reserves its own ~60px header above this for the native
+   collapse-arrow button regardless of anything here — this rule used to
+   ADD another 24px on top of that (plus stSidebarUserContent's own
+   24px default below), stacking into ~124px of empty space before the
+   logo. That's not a real bug — nothing was broken — but it read as
+   unpolished padding rather than a deliberate gap, so it's tightened
+   here instead of just left at Streamlit's defaults. */
 [data-testid="stSidebar"] > div {
-  padding-top: 1.5rem;
+  padding-top: 0;
+}
+
+[data-testid="stSidebarUserContent"] {
+  padding-top: 10px !important;
 }
 
 /* Wordmark: fixed-size, non-shrinking mark + a text column that owns its
@@ -1172,6 +1183,23 @@ button[kind="primary"]:active {
   display: block;
   text-align: center;
   line-height: 1;
+}
+
+/* Groups the sun/toggle/moon trio into one pressed pill (scoped via the
+   real st-key-* class from the container's key=, same technique as the
+   active-nav-item fix — a raw HTML div wrapper doesn't actually nest
+   Streamlit widgets, so this can't be a plain .class-name rule) instead
+   of three elements floating independently on the sidebar background. */
+[class*="st-key-theme_toggle_group_"] {
+  background: var(--surface-neu);
+  border-radius: 999px;
+  padding: 6px 12px;
+  margin-bottom: 4px;
+  box-shadow: var(--shadow-pressed);
+}
+
+[data-testid="stSidebar"] [class*="st-key-theme_toggle_group_"] {
+  background: var(--surface-forest, var(--surface-neu));
 }
 
 [data-testid="stCheckbox"] {

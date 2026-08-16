@@ -9,6 +9,15 @@ relevant information — or the question is unrelated to the business
 entirely — the agent says so instead of guessing or falling back on general
 world knowledge.
 
+Beyond the RAG pipeline itself, this repo is also a full product surface: a
+custom neumorphic design system with light/dark theming and WCAG-verified
+contrast, a 6-page admin app (chat, dashboard, knowledge base management,
+conversations, analytics, settings), and a security-audited upload/ingestion
+path. The **Design system**, **Security**, and **Engineering approach**
+sections below cover that work specifically — it's real, not decorative, and
+each one documents an actual bug or vulnerability that was found, reproduced,
+and fixed, not just a features list.
+
 ## Why this isn't just "prompt + vector search"
 
 A minimal RAG demo embeds the query, does a nearest-neighbor lookup, and
@@ -144,6 +153,138 @@ objects via LangChain's `MessagesPlaceholder`, not as raw `(role, content)`
 template strings — the latter treats any `{`/`}` in a past message's actual
 content (a price, pasted JSON, anything) as a template variable and crashes
 prompt construction on the next turn.
+
+## Design system
+
+The palette is 5 fixed brand colors — forest `#1D684A`, lilac `#B979E4`,
+eggplant `#3D325B`, mint `#5EC780`, emerald `#07B45C` — exposed verbatim as
+`--color-*` custom properties, with a real tint/shade scale generated off
+them for backgrounds, surfaces, borders, and text rather than the 5 raw
+values used directly as text/background colors. Every pairing that can carry
+text was checked against WCAG AA with an actual relative-luminance contrast
+calculation (`src/branding.py`'s module docstring has the numbers), not
+eyeballed — two concrete things that check caught: raw lilac fails AA as
+small text on both themes' base backgrounds (3.83:1), so it's reserved for
+large text/icons/borders, with a separate darker/brighter `accent-strong`
+token as the text-safe variant; raw emerald fails AA as text on light
+backgrounds (2.57:1), so it's a dot/icon color only — status copy renders in
+`text-primary`/`text-secondary`, never in the raw status color itself.
+
+**Visual language: neumorphism.** Every card is the *same* color as the
+surface it sits on (`--surface-neu`, set equal to `--bg`, not a step away
+from it) — depth comes entirely from a matched light/dark shadow pair
+(`--shadow-raised`), never a different fill color or a hard border. Pressed
+states (inset, same two shadow colors) are used semantically: the chat input
+and expanded accordion panels read as "carved in," the active sidebar nav
+item is pressed rather than just tinted (a nice fit — "current page" reads
+naturally as "already pushed"), and buttons swap to pressed on `:active` so
+clicking looks like physically depressing them, not just a color change.
+This replaced an earlier glassmorphism pass (translucent panels + a fixed
+gradient-blob background) — the two styles need opposite backgrounds
+(glassmorphism needs something textured to blur against; neumorphism needs
+a flat, uniform base tone for the embossed-shape illusion to read at all),
+so the gradient layer was removed outright when the visual direction
+changed, not just left underneath at lower opacity.
+
+Typography pairs a serif display face (Fraunces, used only for the "Orchis"
+wordmark) with Space Grotesk for headings/numerals and Inter for body text,
+on a 12/14/16/20/24/32 type scale with tightening letter-spacing on larger
+sizes. Motion is transform/opacity only everywhere (never
+`width`/`height`/`top`/`left`, which forces layout instead of just
+compositing a GPU layer) — entrances are `ease-out`, `prefers-reduced-motion`
+is respected globally, and CSS-only animations do real work rather than
+decorate: an accordion expands via a `grid-template-rows` transition instead
+of an instant `display:none` snap, and a "Processing" badge only pulses
+while a document is genuinely mid-index, never as a fixed decoration.
+
+Two non-obvious, real bugs came out of building this system, both found by
+inspecting the live DOM rather than assumed from documentation:
+
+- The theme toggle (`st.toggle`) renders with `data-testid="stCheckbox"` in
+  the Streamlit version this app pins, not the plausible-looking
+  `"stToggle"` — every recolor/centering rule targeted a testid that didn't
+  exist anywhere in the DOM, so the control silently rendered at Streamlit's
+  untouched default the whole time. Fixed once the real selector was
+  confirmed against the live page.
+- A `<div class="nav-group">` opened and closed across separate
+  `st.markdown()` calls with widgets rendered in between doesn't actually
+  wrap those widgets — each call produces an independent sibling node in
+  Streamlit's real DOM, not nested children of whatever the previous
+  string happened to open. `document.querySelectorAll('.nav-group')[0]
+  .children.length` was `0`. Sidebar grouping now goes through a real
+  `st.container(key=...)`, which Streamlit exposes as an `st-key-<key>`
+  class on a genuine wrapper element.
+
+## Security
+
+Found and fixed during a dedicated audit pass, each reproduced before being
+called a bug:
+
+- **Path traversal → RCE in the Knowledge Base upload handler.**
+  `st.file_uploader`'s `type=` filter is client-side only; the filename in
+  an upload is attacker-controlled, and `DOCS_DIR / uploaded_file.name`
+  resolves a name like `../../app.py` outside the docs directory — on this
+  app, overwriting `app.py` is remote code execution, since Streamlit
+  re-executes that file on every rerun. `pages/1_Knowledge_Base.py` now
+  validates fail-closed: basename-only (after normalizing `\` to `/`, so a
+  Windows-style `..\..\app.py` is caught the same way), an extension
+  allowlist, and a final re-resolve that requires the path's parent to
+  still be `DOCS_DIR` — a backstop that holds even if the first two checks
+  ever miss a form. Verified against 14 hostile filenames.
+- **Unbounded upload size.** No cap existed; every accepted byte ran
+  through the local embedding model. Capped at 10MB both in
+  `.streamlit/config.toml` (`maxUploadSize`, which only bounds what the
+  server *accepts*) and again in Python (`MAX_UPLOAD_BYTES`, which is what
+  the page actually *enforces*).
+- **Stored HTML injection + a copy button that silently never worked.**
+  The chat "Copy" button's `onclick` payload wasn't HTML-escaped, and
+  Streamlit's markdown renderer has no sanitizer — a knowledge-base
+  document containing a stray `"` could break out of the attribute. It also
+  never worked as a button: a string-valued `onClick` is dropped silently
+  by React. Rebuilt with a properly escaped `data-*` attribute and a real
+  delegated click handler.
+- Several `.env`-derived values (active model name, provider, embedding
+  model) rendered into `unsafe_allow_html` blocks unescaped — low risk
+  since that's operator-controlled config, not user input, but fixed as
+  defense in depth so no interpolated value in the app is unescaped.
+
+**Known, deliberately unaddressed gap:** there's no auth or rate limiting in
+front of the app. Anyone who can reach it can spend LLM quota one message at
+a time, and the Knowledge Base page lets any visitor write to the corpus the
+agent answers from. That's a deployment decision (auth in front of
+Streamlit vs. per-session throttling) rather than something to pick
+unilaterally, but it's the largest remaining gap before a public deployment.
+
+## Engineering approach
+
+Every fix in this repo follows the same rule: **no fix without a reproduced
+root cause and a regression check that proves it.** Concretely, that meant
+two verification paths used throughout, not just at the end:
+
+- **Streamlit's `AppTest` framework** (`streamlit.testing.v1`) for
+  logic-level regression checks — it actually executes the app's Python
+  (not a mock), so a sweep like "load every page, send a chat message,
+  toggle dark mode, switch pages, assert no exception" catches real bugs
+  Python-only testing can't: a prompt-template crash that only appears on
+  a message containing `{}` after a second turn, a document re-upload that
+  left duplicate chunks in the vector store, a "Regenerate" button that
+  appended instead of replacing a turn.
+- **Live browser inspection** for anything CSS/DOM-shaped, where reasoning
+  from the stylesheet alone repeatedly turned out to be wrong. Three
+  examples that only surfaced this way: the sidebar's own `stCheckbox` vs
+  `stToggle` testid mismatch above; an `.stApp` that measured
+  `height: 0` via `getBoundingClientRect()` after removing a
+  `position: relative` rule Streamlit's own internal layout turned out to
+  depend on (children still had correct geometry — they were just clipped
+  into an invisible 0px scroll viewport); and ~124px of dead space stacked
+  above the sidebar logo from three separate padding rules compounding
+  without any single one being "wrong" on its own.
+
+The throughline: a plausible-sounding explanation ("this selector should
+match," "this padding looks reasonable") was treated as a hypothesis to
+verify against the actual running app, not a conclusion — most of the real
+bugs listed in this README were invisible from reading the code and only
+became obvious once actually reproduced.
 
 ## Project structure
 
@@ -338,3 +479,8 @@ re-test with `DEBUG_MODE=true` to see the actual candidate scores.
   purpose — walking `sentence-transformers`'/`transformers`' hundreds of
   lazy-loaded submodules on every file save made the UI feel frozen during
   streaming. Restart the server manually after editing source files.
+- Uploaded document size is capped at 10MB per file (see **Security**
+  above) — increase `maxUploadSize` in `.streamlit/config.toml` and
+  `MAX_UPLOAD_BYTES` in `pages/1_Knowledge_Base.py` together if you need
+  larger source documents; both must move in step, since either one alone
+  only enforces half the limit.

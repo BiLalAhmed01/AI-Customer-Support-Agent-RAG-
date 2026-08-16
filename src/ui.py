@@ -80,19 +80,25 @@ def render_theme_toggle(key: str = "theme_toggle") -> None:
     normal rerun, so no manual st.rerun() is needed either."""
     current = get_theme()
     st.session_state[key] = (current == "dark")
-    cols = st.columns([1, 2.6, 1], gap="small", vertical_alignment="center")
-    with cols[0]:
-        st.markdown('<span class="theme-icon sun">☀</span>', unsafe_allow_html=True)
-    with cols[1]:
-        st.toggle(
-            "Dark mode",
-            key=key,
-            label_visibility="collapsed",
-            on_change=_apply_theme_toggle,
-            args=(key,),
-        )
-    with cols[2]:
-        st.markdown('<span class="theme-icon moon">☾</span>', unsafe_allow_html=True)
+    # A real st.container (not a raw HTML div opened/closed around
+    # widgets — that doesn't actually nest them; see .nav-group's history
+    # in the CSS for why) so the CSS below can give the icon+toggle+icon
+    # trio one grouped pressed-pill background instead of three elements
+    # floating independently on the sidebar.
+    with st.container(key=f"theme_toggle_group_{key}"):
+        cols = st.columns([1, 2.6, 1], gap="small", vertical_alignment="center")
+        with cols[0]:
+            st.markdown('<span class="theme-icon sun">☀</span>', unsafe_allow_html=True)
+        with cols[1]:
+            st.toggle(
+                "Dark mode",
+                key=key,
+                label_visibility="collapsed",
+                on_change=_apply_theme_toggle,
+                args=(key,),
+            )
+        with cols[2]:
+            st.markdown('<span class="theme-icon moon">☾</span>', unsafe_allow_html=True)
 
 
 def render_header(title: str, subtitle: str = "", show_status: bool = True) -> None:
