@@ -21,7 +21,7 @@ inject_theme_css()
 inject_favicon_metadata("analytics")
 
 render_sidebar(active="analytics")
-render_header("Analytics", "Usage &amp; quality trends")
+render_header("Analytics", "Usage & quality trends")
 
 st.markdown(
     """

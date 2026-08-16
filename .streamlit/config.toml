@@ -17,6 +17,14 @@ font = "sans serif"
 gatherUsageStats = false
 
 [server]
+# Streamlit's default is 200 MB per file, which the Knowledge Base uploader
+# would happily write to disk and then push through the local embedding
+# model — an easy way for one upload to fill the disk and pin the CPU for
+# minutes. Support documents are text; 10 MB is generous for a real PDF
+# manual. pages/1_Knowledge_Base.py enforces the same limit again in
+# Python, since this setting only bounds what the server accepts.
+maxUploadSize = 10
+
 # The default file watcher re-walks every imported module's __path__ on each
 # script run to support hot-reload. transformers (pulled in by the
 # sentence-transformers reranker/embeddings) has hundreds of lazy-loaded

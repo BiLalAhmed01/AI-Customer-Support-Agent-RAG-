@@ -27,7 +27,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from src.config import settings
-from src.intent import Intent, classify_intent, get_profile
+from src.intent import classify_intent, get_profile
 from src.retrieval import (
     RetrievalDebug,
     RetrievedChunk,
@@ -250,7 +250,7 @@ def _make_debug() -> RetrievalDebug:
 
 def _run_pipeline(
     query: str, history: list[dict], debug: RetrievalDebug | None
-) -> tuple[list[RetrievedChunk], str, str, Intent]:
+) -> tuple[list[RetrievedChunk], str, str]:
     """The core agent flow shared by both the streaming and non-streaming
     entry points:
 
@@ -258,9 +258,11 @@ def _run_pipeline(
         -> retrieve relevant information
 
     Generation (grounded response + next-best-action) happens in the
-    caller, since streaming vs. non-streaming need different chain calls.
+    caller.
 
-    Returns (chunks, context, guidance, intent).
+    Returns (chunks, context, guidance). The intent itself isn't returned
+    — it only ever shaped `guidance` and the debug record, both of which
+    are already set here.
     """
     intent = classify_intent(query)
     profile = get_profile(intent)
@@ -300,66 +302,32 @@ def _run_pipeline(
         debug.used_retrieval = use_retrieval
 
     context = format_context(chunks) if chunks else NO_CONTEXT_NOTE
-    return chunks, context, profile.next_action_hint, intent
-
-
-def answer_question(query: str, history: list[dict] | None = None) -> dict:
-    """Run the full agent pipeline for one user turn (non-streaming).
-
-    The LLM is always called — retrieval only decides what context it sees.
-    A greeting or a vague "I need help" with zero matching chunks still gets
-    a real, helpful reply; a specific factual question with zero matching
-    chunks gets an honest, proactive non-answer instead of a hallucination
-    (enforced via the system prompt, not by skipping the call).
-
-    Returns a dict with:
-      - "answer": str
-      - "sources": list[str] (unique source filenames used)
-      - "grounded": bool (True when at least one relevant chunk was found
-        and passed to the model as context)
-      - "debug": RetrievalDebug — always populated (it's collected as a
-        side effect of retrieval, not extra work). Callers decide what's
-        safe to show: the full candidate table is dev-only
-        (settings.debug_mode); source/score of kept chunks is safe for a
-        user-facing "how this was found" panel.
-    """
-    history = history or []
-    debug = _make_debug()
-    chunks, context, guidance, _intent = _run_pipeline(query, history, debug)
-
-    chain = _build_chain()
-    response = chain.invoke({
-        "context": context,
-        "guidance": guidance,
-        "question": query,
-        "history": _history_to_messages(history),
-    })
-
-    sources = sorted({chunk.source for chunk in chunks})
-    return {
-        "answer": response.content,
-        "sources": sources,
-        "grounded": bool(chunks),
-        "debug": debug,
-    }
+    return chunks, context, profile.next_action_hint
 
 
 def prepare_answer_stream(
     query: str, history: list[dict] | None = None
 ) -> tuple[list[str], bool, Iterator[str], RetrievalDebug]:
-    """Retrieval-then-stream split for UIs that want to render tokens live.
+    """Run the full agent pipeline for one user turn, then stream the answer.
 
     Retrieval happens eagerly (it's fast and cached), so the caller gets
-    `sources` and `grounded` immediately. The LLM is always streamed — see
-    `answer_question` for why the retrieval-gate approach was replaced.
+    `sources` and `grounded` immediately, before the first token arrives.
+    The LLM is always called — retrieval only decides what context it
+    sees. A greeting or a vague "I need help" with zero matching chunks
+    still gets a real, helpful reply; a specific factual question with
+    zero matching chunks gets an honest non-answer instead of a
+    hallucination (enforced via the system prompt, not by skipping the
+    call).
 
     Returns (sources, grounded, token_generator, debug). `debug` is always
-    populated — see `answer_question`'s docstring for what's safe to show
-    where.
+    populated — it's collected as a side effect of retrieval, not extra
+    work. Callers decide what's safe to show: the full candidate table is
+    dev-only (settings.debug_mode); the source/score of kept chunks is
+    safe for the user-facing "how this was found" panel.
     """
     history = history or []
     debug = _make_debug()
-    chunks, context, guidance, _intent = _run_pipeline(query, history, debug)
+    chunks, context, guidance = _run_pipeline(query, history, debug)
     sources = sorted({chunk.source for chunk in chunks})
     chain = _build_chain()
 

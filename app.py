@@ -5,16 +5,22 @@ src/llm.py and src/retrieval.py and is called here unmodified.
 """
 
 import html
-import json
 import time
 from pathlib import Path
 
 import streamlit as st
 
-from src.branding import FAVICON_DIR, brand_hero, brand_mark, inject_favicon_metadata, inject_theme_css
+from src.branding import (
+    FAVICON_DIR,
+    brand_hero,
+    brand_mark,
+    inject_favicon_metadata,
+    inject_theme_css,
+    install_copy_handler,
+)
 from src.config import settings
 from src.llm import prepare_answer_stream
-from src.retrieval import collection_count, collection_is_empty
+from src.retrieval import collection_is_empty
 from src.ui import render_header, render_sidebar
 
 st.set_page_config(
@@ -26,6 +32,7 @@ st.set_page_config(
 
 inject_theme_css()
 inject_favicon_metadata("chat")
+install_copy_handler()
 
 DOCS_DIR = Path(__file__).parent / "data" / "docs"
 
@@ -86,15 +93,16 @@ def render_message(role: str, text: str, error: bool = False) -> str:
     """Just the bubble — sources/trace/actions are rendered separately
     (and only once, after generation finishes) so they aren't re-sent on
     every incremental streamed-token update."""
+    if role == "user":
+        # Errors are only ever attached to assistant turns, so the user
+        # branch has no error styling to apply.
+        return f'<div class="msg-row user"><div class="msg-bubble">{_escape(text)}</div></div>'
+
     if error:
         body = f'<span class="error-label">Connection issue</span>{_escape(text)}'
     else:
         body = _escape(text)
-
     bubble_class = "msg-bubble error" if error else "msg-bubble"
-
-    if role == "user":
-        return f'<div class="msg-row user"><div class="msg-bubble">{body}</div></div>'
 
     return (
         f'<div class="msg-row assistant"><div class="msg-inner">'
@@ -204,10 +212,35 @@ def render_rag_trace(used_retrieval: bool, candidates: list[dict] | None) -> str
 
 
 def render_copy_action(text: str) -> str:
-    js_text = json.dumps(text)
+    """The answer text rides along in a `data-orchis-copy` attribute; the
+    click is handled by the one delegated listener install_copy_handler()
+    puts on the page.
+
+    It used to be an inline `onclick="navigator.clipboard.writeText(...)"`
+    with the text JSON-encoded into it, which was broken twice over:
+
+      1. It never copied anything. Streamlit renders `unsafe_allow_html`
+         markup through react-markdown + rehype-raw, so `onclick` arrives
+         at React as a *string* prop — React refuses to attach a string as
+         an event listener (it logs "Expected `onClick` listener to be a
+         function") and drops it. The button was a decoration that did
+         nothing on every click.
+      2. json.dumps() emits its own surrounding double quotes and does not
+         escape `<`, `>` or `"` for HTML, so an answer containing a quoted
+         phrase — "standard" shipping — terminated the onclick attribute
+         early, and one containing `">` broke out of the tag entirely,
+         letting model output inject arbitrary markup into the page. That
+         output is influenced by whatever is in the knowledge base, so a
+         poisoned document was enough to reach it.
+
+    html.escape(quote=True) fixes (2): the browser decodes the entities
+    back to the exact original text when reading the attribute, so no
+    escaping leaks into what gets copied.
+    """
     return (
         '<div class="msg-actions" style="margin-left: 40px;">'
-        f'<button title="Copy response" onclick="navigator.clipboard.writeText({js_text})">⧉ Copy</button>'
+        f'<button type="button" title="Copy response" '
+        f'data-orchis-copy="{html.escape(text, quote=True)}">⧉ Copy</button>'
         '</div>'
     )
 
@@ -221,12 +254,20 @@ def render_feedback_row(index: int, message: dict) -> None:
     cols = st.columns([1.5, 1, 1.4, 6], gap="small")
     with cols[0]:
         if st.button("↻ Regenerate", key=f"regen_{index}", help="Ask Orchis to answer again"):
-            prior_user = next(
-                (m["content"] for m in reversed(st.session_state.messages[:index]) if m["role"] == "user"),
+            # Truncate to *before* the user turn being replayed, not before
+            # the assistant reply: pending_input is fed straight back into
+            # the normal input path below, which appends the user message
+            # again. Keeping it here as well left the conversation holding
+            # the same question twice in a row (and passed that duplicate
+            # to the model as history on every later turn).
+            prior_user_index = next(
+                (i for i in range(index - 1, -1, -1)
+                 if st.session_state.messages[i]["role"] == "user"),
                 None,
             )
-            if prior_user:
-                st.session_state.messages = st.session_state.messages[:index]
+            if prior_user_index is not None:
+                prior_user = st.session_state.messages[prior_user_index]["content"]
+                st.session_state.messages = st.session_state.messages[:prior_user_index]
                 st.session_state.pending_input = prior_user
                 st.rerun()
     with cols[1]:
@@ -265,7 +306,7 @@ def render_debug_expander(debug_info, key: str) -> None:
             f"**Kept after rerank:** {debug_info.candidates_kept}"
         )
         if debug_info.candidates:
-            st.dataframe(debug_info.candidates, use_container_width=True, hide_index=True, key=key)
+            st.dataframe(debug_info.candidates, width="stretch", hide_index=True, key=key)
 
 
 # The very first call into src/retrieval.py on a cold process loads the
@@ -332,7 +373,7 @@ if not st.session_state.messages and not incoming_input and not kb_empty:
         cols = st.columns(2)
         for i, prompt in enumerate(suggestions):
             with cols[i % 2]:
-                if st.button(prompt, key=f"starter_{i}", use_container_width=True):
+                if st.button(prompt, key=f"starter_{i}", width="stretch"):
                     st.session_state.pending_input = prompt
                     st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)

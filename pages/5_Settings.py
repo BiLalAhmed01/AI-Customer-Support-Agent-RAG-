@@ -5,6 +5,8 @@ value shown here is the one actually in effect for this running process.
 API keys are deliberately never read or displayed, not even redacted.
 """
 
+import html
+
 import streamlit as st
 
 from src.branding import FAVICON_DIR, get_theme, inject_favicon_metadata, inject_theme_css
@@ -28,7 +30,7 @@ st.markdown(
     f"""
     <div class="status-card">
         <div class="label">Provider</div>
-        <div class="value">{settings.llm_provider.title()}</div>
+        <div class="value">{html.escape(settings.llm_provider.title())}</div>
     </div>
     <div class="status-card">
         <div class="label">Active model</div>
@@ -36,7 +38,7 @@ st.markdown(
     </div>
     <div class="status-card">
         <div class="label">Embedding model</div>
-        <div class="value">{settings.embedding_model}</div>
+        <div class="value">{html.escape(settings.embedding_model)}</div>
     </div>
     """,
     unsafe_allow_html=True,
@@ -74,7 +76,7 @@ st.markdown(
     </div>
     <div class="status-card">
         <div class="label">Vector store</div>
-        <div class="value">Chroma &middot; collection "{settings.collection_name}"</div>
+        <div class="value">Chroma &middot; collection "{html.escape(settings.collection_name)}"</div>
     </div>
     """,
     unsafe_allow_html=True,

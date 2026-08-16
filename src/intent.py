@@ -32,14 +32,7 @@ class Intent(str, Enum):
 
 @dataclass(frozen=True)
 class IntentProfile:
-    label: str
     use_retrieval: bool
-    # True for intents that commonly involve asking Orchis to actually *do*
-    # something (look up a specific order, cancel it, issue a refund,
-    # change an account) rather than just explain a policy. Orchis has no
-    # tools connected to any real backend, so these always get an explicit
-    # "I can't do that yet, here's how you can" framing.
-    live_action_intent: bool
     next_action_hint: str
     # For intents with a fixed, known informational target regardless of
     # how the user phrases it (e.g. escalation always wants the same
@@ -52,9 +45,7 @@ class IntentProfile:
 
 INTENT_PROFILES: dict[Intent, IntentProfile] = {
     Intent.GENERAL_INFO: IntentProfile(
-        label="General information",
         use_retrieval=True,
-        live_action_intent=False,
         next_action_hint=(
             "This looks like a general question about the company. After "
             "answering, mention one or two related things you can also help "
@@ -62,27 +53,21 @@ INTENT_PROFILES: dict[Intent, IntentProfile] = {
         ),
     ),
     Intent.PRODUCT_INFO: IntentProfile(
-        label="Product information",
         use_retrieval=True,
-        live_action_intent=False,
         next_action_hint=(
             "This is a product question. After answering, offer to share "
             "pricing or explain how to order this product next."
         ),
     ),
     Intent.PRICING: IntentProfile(
-        label="Pricing",
         use_retrieval=True,
-        live_action_intent=False,
         next_action_hint=(
             "This is a pricing question. After answering, offer to explain "
             "how to place an order for the product."
         ),
     ),
     Intent.ORDERING: IntentProfile(
-        label="Ordering",
         use_retrieval=True,
-        live_action_intent=False,
         next_action_hint=(
             "This is a question about placing an order. After answering, "
             "offer to walk them through the next step or answer a follow-up "
@@ -90,18 +75,14 @@ INTENT_PROFILES: dict[Intent, IntentProfile] = {
         ),
     ),
     Intent.SHIPPING: IntentProfile(
-        label="Shipping",
         use_retrieval=True,
-        live_action_intent=False,
         next_action_hint=(
             "This is a shipping question. After answering, mention that "
             "they can track their order once it ships."
         ),
     ),
     Intent.ORDER_TRACKING: IntentProfile(
-        label="Order tracking",
         use_retrieval=True,
-        live_action_intent=True,
         next_action_hint=(
             "This is an order-tracking request. You have no order-lookup "
             "tool, so you cannot check any specific order's live status — "
@@ -111,9 +92,7 @@ INTENT_PROFILES: dict[Intent, IntentProfile] = {
         ),
     ),
     Intent.RETURNS_REFUNDS: IntentProfile(
-        label="Returns/refunds",
         use_retrieval=True,
-        live_action_intent=True,
         next_action_hint=(
             "This is a returns/refunds request. You have no order-management "
             "tool, so you cannot start a return or issue a refund yourself — "
@@ -122,9 +101,7 @@ INTENT_PROFILES: dict[Intent, IntentProfile] = {
         ),
     ),
     Intent.CANCELLATION: IntentProfile(
-        label="Cancellation",
         use_retrieval=True,
-        live_action_intent=True,
         next_action_hint=(
             "This is a cancellation request. You have no order-management "
             "tool, so you cannot cancel an order yourself — say that "
@@ -134,9 +111,7 @@ INTENT_PROFILES: dict[Intent, IntentProfile] = {
         ),
     ),
     Intent.ACCOUNT_SUPPORT: IntentProfile(
-        label="Account/support",
         use_retrieval=True,
-        live_action_intent=True,
         next_action_hint=(
             "This is an account-related request. You have no account-"
             "management tool, so you cannot change account details or reset "
@@ -145,9 +120,7 @@ INTENT_PROFILES: dict[Intent, IntentProfile] = {
         ),
     ),
     Intent.HUMAN_ESCALATION: IntentProfile(
-        label="Human escalation",
         use_retrieval=True,
-        live_action_intent=True,
         next_action_hint=(
             "The user wants a human. You cannot connect them to one "
             "yourself — acknowledge that plainly and give the exact "
@@ -163,9 +136,7 @@ INTENT_PROFILES: dict[Intent, IntentProfile] = {
         retrieval_query_override="how to contact support live chat email phone business hours",
     ),
     Intent.UNKNOWN: IntentProfile(
-        label="Unknown/out-of-scope",
         use_retrieval=True,
-        live_action_intent=False,
         next_action_hint=(
             "If nothing relevant turns up in the context, don't just refuse "
             "— be honest that the current knowledge base doesn't cover this "

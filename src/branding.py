@@ -9,6 +9,7 @@ size-specific re-encode instead of just scaling one embed with CSS.
 """
 
 import base64
+import json
 from functools import lru_cache
 from pathlib import Path
 
@@ -55,14 +56,14 @@ _BRAND_COLORS: dict[str, str] = {
 LIGHT_THEME: dict[str, str] = {
     **_BRAND_COLORS,
 
-    # Soft lilac/mint washes instead of pure white, per brief — the base
-    # canvas, a plain elevated surface, and two tinted surfaces for
-    # sections that want to read as "branded" rather than neutral.
+    # Soft lilac wash instead of pure white, per brief.
     "bg": "#FAF7FE",
     "surface": "#FDFBFF",
-    "surface-elevated": "#FFFFFF",
     "surface-tint": "#F3EAFB",       # lilac wash — hover states, active nav
-    "surface-tint-mint": "#EAF7EF",  # mint wash — occasional highlight panels
+    "surface-forest": "#E9F5EC",     # pale forest/mint tint — sidebar's distinct
+                                      # identity vs. the lilac-toned main pane,
+                                      # the light-mode echo of dark mode's forest
+                                      # sidebar (see DARK_THEME's surface-forest)
     "border": "#E4D9F0",
     "border-strong": "#D9C7EE",
 
@@ -73,7 +74,6 @@ LIGHT_THEME: dict[str, str] = {
     "accent": "#B979E4",             # raw lilac — bg/border/icon use only
     "accent-strong": "#8A3FBD",      # 5.61:1 on bg — text-safe lilac (links, labels)
     "accent-on-accent": "#241B36",   # text color for lilac-filled buttons (5.29:1)
-    "accent-secondary": "#5EC780",   # raw mint — decorative/hover only
     "accent-tint": "#F3EAFB",
     "accent-tint-strong": "#E8D2F7",
 
@@ -86,9 +86,38 @@ LIGHT_THEME: dict[str, str] = {
     "status-error-bg": "rgba(196, 72, 59, 0.10)",
     "status-online-ring": "rgba(7, 180, 92, 0.16)",
 
-    "shadow-sm": "0 1px 2px rgba(61, 50, 91, 0.06)",
     "shadow-md": "0 8px 24px rgba(61, 50, 91, 0.10)",
     "focus-ring": "rgba(185, 121, 228, 0.35)",
+
+    # Neumorphism tokens. The defining trait (and the thing that makes it
+    # look wrong if got wrong) is that a "card" is the *same* color as the
+    # surface it sits on — depth comes entirely from a matched pair of
+    # soft shadows (a highlight up-left, a shadow down-right), never from
+    # a different fill color or a hard border. surface-neu is therefore
+    # set equal to bg, not a step away from it like the old surface/
+    # surface-tint tokens. shadow-raised is the resting "embossed" state;
+    # shadow-pressed (inset, same two colors) is for anything that should
+    # read as pushed in — the chat input, a toggle's track, a button's
+    # :active state — so press interactions look like something real
+    # physically depressing rather than just a color swap. A very
+    # low-opacity neu-border is included despite pure neumorphism
+    # avoiding borders entirely: at this text scale, shadow-only edges
+    # were too faint to reliably tell where one card ends and the next
+    # begins, which is the classic, well-documented usability failure
+    # mode of the style — a hairline assist keeps it accessible without
+    # visually reading as a "bordered card."
+    "surface-neu": "#FAF7FE",
+    "neu-light": "rgba(255, 255, 255, 0.9)",
+    "neu-dark": "rgba(163, 150, 195, 0.55)",
+    "neu-border": "rgba(61, 50, 91, 0.05)",
+    "shadow-raised": "6px 6px 16px rgba(163, 150, 195, 0.5), -6px -6px 16px rgba(255, 255, 255, 0.9)",
+    "shadow-raised-sm": "3px 3px 8px rgba(163, 150, 195, 0.45), -3px -3px 8px rgba(255, 255, 255, 0.85)",
+    # A deeper version of shadow-raised (bigger offset/blur, same two
+    # colors) for hover states on cards — lifting a raised shape further
+    # off the surface, not swapping its color, is what "hover" should
+    # mean in a system where color never carried the depth cue.
+    "shadow-raised-lg": "10px 10px 24px rgba(163, 150, 195, 0.55), -8px -8px 20px rgba(255, 255, 255, 0.95)",
+    "shadow-pressed": "inset 4px 4px 10px rgba(163, 150, 195, 0.45), inset -4px -4px 10px rgba(255, 255, 255, 0.8)",
 }
 
 DARK_THEME: dict[str, str] = {
@@ -100,7 +129,6 @@ DARK_THEME: dict[str, str] = {
     # instead of just a lighter/darker shade of the same hue.
     "bg": "#3D325B",
     "surface": "#4A3D6E",            # one step up — cards, message bubbles
-    "surface-elevated": "#5A4B82",   # modals, debug panel, dropdowns
     "surface-tint": "rgba(185, 121, 228, 0.10)",  # hover/active wash
     "surface-forest": "#12271D",     # sidebar contrast panel (forest, darkened)
     "border": "rgba(185, 121, 228, 0.16)",
@@ -113,7 +141,6 @@ DARK_THEME: dict[str, str] = {
     "accent": "#B979E4",              # raw lilac — bg/border/icon use only
     "accent-strong": "#D2A6F0",        # 5.79:1 on bg — text-safe lilac (links, labels)
     "accent-on-accent": "#241B36",    # text color for lilac-filled buttons (5.29:1)
-    "accent-secondary": "#5EC780",    # raw mint — decorative/hover only
     "accent-tint": "rgba(185, 121, 228, 0.16)",
     "accent-tint-strong": "rgba(185, 121, 228, 0.26)",
 
@@ -126,9 +153,22 @@ DARK_THEME: dict[str, str] = {
     "status-error-bg": "rgba(234, 122, 108, 0.14)",
     "status-online-ring": "rgba(7, 180, 92, 0.24)",
 
-    "shadow-sm": "0 1px 2px rgba(10, 6, 18, 0.35)",
     "shadow-md": "0 8px 28px rgba(10, 6, 18, 0.45), 0 0 0 1px rgba(185, 121, 228, 0.08)",
     "focus-ring": "rgba(185, 121, 228, 0.40)",
+
+    # See LIGHT_THEME's neumorphism comment for the general approach.
+    # Dark mode's shadow pair is a lighter lilac lift off the eggplant
+    # base (not white — a literal white highlight would read as a
+    # light-mode leak) paired with a near-black shadow, rather than the
+    # light theme's white-highlight/muted-lavender-shadow pair.
+    "surface-neu": "#3D325B",
+    "neu-light": "rgba(150, 125, 195, 0.22)",
+    "neu-dark": "rgba(15, 10, 25, 0.55)",
+    "neu-border": "rgba(185, 121, 228, 0.08)",
+    "shadow-raised": "6px 6px 16px rgba(15, 10, 25, 0.55), -6px -6px 16px rgba(150, 125, 195, 0.18)",
+    "shadow-raised-sm": "3px 3px 8px rgba(15, 10, 25, 0.5), -3px -3px 8px rgba(150, 125, 195, 0.15)",
+    "shadow-raised-lg": "10px 10px 24px rgba(15, 10, 25, 0.6), -8px -8px 20px rgba(150, 125, 195, 0.22)",
+    "shadow-pressed": "inset 4px 4px 10px rgba(15, 10, 25, 0.5), inset -4px -4px 10px rgba(150, 125, 195, 0.15)",
 }
 
 
@@ -230,6 +270,82 @@ def brand_mark(size: int = 34) -> str:
 def brand_hero(size: int = 72) -> str:
     """Larger rendering of the same mark for the empty-chat hero moment."""
     return _mark_img(size, "orchis-hero-img")
+
+
+# Click handler for the per-message copy buttons app.py renders. It has to
+# be a real listener rather than an inline onclick= because Streamlit's
+# markdown renderer hands raw HTML to React, which drops string-valued
+# event-handler attributes instead of attaching them (see
+# app.py's render_copy_action docstring).
+#
+# Delegated from the document, so it covers every copy button that exists
+# now or gets re-rendered later without re-running any JS per message —
+# and injected as a <script> element in the *parent* document rather than
+# left running inside the component iframe, so the handler keeps working
+# after Streamlit unmounts that iframe on a later rerun (a listener whose
+# function object lives in a torn-down iframe realm does not).
+_COPY_HANDLER_JS = """
+(function () {
+  if (window.__orchisCopyBound) { return; }
+  window.__orchisCopyBound = true;
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest('[data-orchis-copy]');
+    if (!button) { return; }
+    var text = button.getAttribute('data-orchis-copy');
+    var original = button.innerHTML;
+    var confirm = function () {
+      button.innerHTML = '\\u2713 Copied';
+      button.setAttribute('data-copied', '1');
+      setTimeout(function () {
+        button.innerHTML = original;
+        button.removeAttribute('data-copied');
+      }, 1500);
+    };
+    var fallback = function () {
+      var area = document.createElement('textarea');
+      area.value = text;
+      area.setAttribute('readonly', '');
+      area.style.position = 'fixed';
+      area.style.opacity = '0';
+      document.body.appendChild(area);
+      area.select();
+      try { document.execCommand('copy'); confirm(); } catch (err) { /* clipboard unavailable */ }
+      document.body.removeChild(area);
+    };
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(confirm, fallback);
+    } else {
+      fallback();
+    }
+  });
+})();
+"""
+
+
+def install_copy_handler() -> None:
+    """Inject the copy-button click handler once per session."""
+    if st.session_state.get("_copy_handler_installed"):
+        return
+    st.session_state._copy_handler_installed = True
+
+    components.html(
+        f"""
+        <script>
+        (function() {{
+            try {{
+                var doc = window.parent.document;
+                if (doc.getElementById('orchis-copy-handler')) {{ return; }}
+                var el = doc.createElement('script');
+                el.id = 'orchis-copy-handler';
+                el.textContent = {json.dumps(_COPY_HANDLER_JS)};
+                doc.head.appendChild(el);
+            }} catch (e) {{ /* cross-origin embed — copy button stays inert */ }}
+        }})();
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
 
 
 @lru_cache(maxsize=None)

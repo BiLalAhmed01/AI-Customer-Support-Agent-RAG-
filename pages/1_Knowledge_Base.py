@@ -30,6 +30,49 @@ inject_favicon_metadata("knowledge_base")
 DOCS_DIR = Path(settings.docs_dir)
 
 
+# Upload guard rails. `type=` on st.file_uploader is a browser-side accept
+# filter and a client-side check only — it does not stop a crafted POST to
+# Streamlit's upload endpoint from carrying any filename and any bytes, so
+# the real validation has to happen here, before anything is written to
+# disk.
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+
+
+def safe_destination(raw_name: str) -> Path:
+    """Resolve an uploaded file's client-supplied name to a path that is
+    provably inside DOCS_DIR, or raise.
+
+    The name in an upload is attacker-controlled: "../../app.py" or
+    "C:/Windows/Temp/x.md" both arrive intact if a client chooses to send
+    them, and `DOCS_DIR / raw_name` happily resolves either one outside
+    the docs directory (verified: `Path("data/docs") / "../../evil.md"`
+    resolves to the repo root). Overwriting app.py that way is remote code
+    execution on the next rerun, since Streamlit re-executes the script
+    file on every interaction.
+
+    Three checks, because each covers a different escape: taking the
+    basename (after normalizing "\\" to "/", so a Windows-style
+    "..\\..\\app.py" is split the same way on any platform) removes
+    traversal segments; the extension allowlist stops a .py/.exe landing
+    in a directory the app itself reads; and re-resolving the final path
+    and requiring its parent to still be DOCS_DIR is the backstop that
+    fails closed if either of the first two ever misses a form.
+    """
+    name = Path(raw_name.replace("\\", "/")).name
+    if not name or name in {".", ".."} or name.startswith("."):
+        raise ValueError(f"Rejected unsafe filename: {raw_name!r}")
+
+    suffix = Path(name).suffix.lower()
+    if suffix not in SUPPORTED_EXTENSIONS:
+        raise ValueError(f"Unsupported file type '{suffix or name}' — allowed: .pdf, .txt, .md")
+
+    docs_root = DOCS_DIR.resolve()
+    dest = (docs_root / name).resolve()
+    if dest.parent != docs_root:
+        raise ValueError(f"Rejected unsafe filename: {raw_name!r}")
+    return dest
+
+
 def _probe_readability(path: Path) -> tuple[bool, str]:
     """Read-only check using the exact same loader classes src/ingest.py
     uses for real ingestion — if this fails, ingestion would fail on this
@@ -72,6 +115,9 @@ def get_documents() -> list[dict]:
             if p.is_file() and p.suffix.lower() in SUPPORTED_EXTENSIONS
         )
 
+    # Every name here came from either disk_files or indexed, so a name
+    # with 0 chunks is necessarily on disk — the two branches below are
+    # exhaustive.
     all_names = sorted(set(disk_files) | set(indexed.keys()))
     docs = []
     for name in all_names:
@@ -82,12 +128,10 @@ def get_documents() -> list[dict]:
         if chunk_count > 0:
             status, error_detail = "indexed", ""
             missing_note = not on_disk
-        elif on_disk:
+        else:
             ok, error_detail = _probe_readability(file_path)
             status = "processing" if ok else "failed"
             missing_note = False
-        else:
-            status, error_detail, missing_note = "indexed", "", False  # unreachable in practice
 
         size_str, modified_str = None, None
         if on_disk:
@@ -150,6 +194,11 @@ def render_doc_card(doc: dict) -> str:
 # ---------- Header ----------
 render_sidebar(active="knowledge_base")
 render_header("Knowledge Base", "Documents indexed for retrieval")
+
+upload_result = st.session_state.pop("kb_upload_result", None)
+if upload_result:
+    level, text = upload_result
+    (st.success if level == "success" else st.error)(text)
 
 documents = get_documents()
 total_docs = len(documents)
@@ -219,23 +268,50 @@ if uploaded_files:
     if st.button(f"Index {len(uploaded_files)} document(s)", type="primary"):
         DOCS_DIR.mkdir(parents=True, exist_ok=True)
         saved_names = []
+        rejected: list[str] = []
         for f in uploaded_files:
-            dest = DOCS_DIR / f.name
-            dest.write_bytes(f.getvalue())
-            saved_names.append(f.name)
-
-        with st.spinner("Indexing document(s)... this runs the real ingestion pipeline and may take a moment."):
+            data = f.getvalue()
             try:
-                # Restricted to just the files saved above — without this,
-                # every already-indexed document in DOCS_DIR would be
-                # re-embedded and re-stored too, duplicating its chunks in
-                # the collection on every upload.
-                chunk_count = ingest(str(DOCS_DIR), reset=False, only_filenames=set(saved_names))
-                st.success(
-                    f"Indexed {', '.join(saved_names)} — {chunk_count} chunk(s) added to the knowledge base."
-                )
-            except Exception as exc:
-                st.error(f"Indexing failed: {exc}")
+                if len(data) > MAX_UPLOAD_BYTES:
+                    raise ValueError(
+                        f"{_format_size(len(data))} exceeds the "
+                        f"{_format_size(MAX_UPLOAD_BYTES)} per-file limit"
+                    )
+                dest = safe_destination(f.name)
+            except ValueError as exc:
+                rejected.append(f"{f.name}: {exc}")
+                continue
+            dest.write_bytes(data)
+            saved_names.append(dest.name)
+
+        if saved_names:
+            with st.spinner("Indexing document(s)... this runs the real ingestion pipeline and may take a moment."):
+                try:
+                    # Restricted to just the files saved above — without this,
+                    # every already-indexed document in DOCS_DIR would be
+                    # re-embedded and re-stored too, duplicating its chunks in
+                    # the collection on every upload.
+                    chunk_count = ingest(str(DOCS_DIR), reset=False, only_filenames=set(saved_names))
+                    level = "success"
+                    message = (
+                        f"Indexed {', '.join(saved_names)} — {chunk_count} chunk(s) added "
+                        "to the knowledge base."
+                    )
+                except Exception as exc:
+                    level, message = "error", f"Indexing failed: {exc}"
+        else:
+            level, message = "error", "Nothing was indexed."
+
+        if rejected:
+            message += "  Rejected: " + "; ".join(rejected)
+
+        # Stashed rather than rendered here: the st.rerun() below (needed
+        # so the document list above reflects the new chunks) throws away
+        # everything this script run has already emitted, so an st.success/
+        # st.error written at this point would flash and vanish before the
+        # user could read it. The next run renders it from session state
+        # and clears it.
+        st.session_state.kb_upload_result = (level, message)
         st.rerun()
 
 st.markdown("</div>", unsafe_allow_html=True)

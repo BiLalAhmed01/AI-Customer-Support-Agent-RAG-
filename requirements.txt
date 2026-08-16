@@ -7,6 +7,10 @@ chromadb>=0.5.0
 sentence-transformers>=3.0.0
 Pillow>=10.0.0
 pypdf>=4.0.0
-streamlit>=1.38.0
+# 1.49 is the floor for the `width=` argument on st.button/st.dataframe,
+# which replaced `use_container_width=` — Streamlit's own runtime warning
+# gives that argument a 2025-12-31 removal date, so the app is written
+# against the replacement rather than the deprecated form.
+streamlit>=1.49.0
 python-dotenv>=1.0.0
 tiktoken>=0.7.0

@@ -7,6 +7,8 @@ differently. Presentation only — nothing here touches retrieval,
 generation, or ingestion.
 """
 
+import html
+
 import streamlit as st
 
 from src.branding import brand_mark, get_theme, set_theme
@@ -19,20 +21,32 @@ _MODEL_BY_PROVIDER = {
     "groq": settings.groq_model,
 }
 
-# (nav key, sidebar label, emoji, page path). "chat" has no page path of
+# (nav key, sidebar label, icon, page path). "chat" has no page path of
 # its own here — it's reached via the "New Chat" action, not a plain link,
 # since clicking it should also reset the conversation.
+#
+# Icons are deliberately all plain geometric/symbol glyphs, not emoji —
+# 🗂 and 📚 (the two icons this replaced) are full pictographic emoji that
+# render in flat color on every modern platform, which clashed hard next
+# to ◧/◔/⚙'s monochrome, theme-colored glyphs. One consistent icon
+# language reads as considered; a mix of colorful and monochrome icons in
+# the same list reads as unfinished regardless of what else is right.
 NAV_ITEMS: list[tuple[str, str, str, str]] = [
     ("dashboard", "Dashboard", "◧", "pages/2_Dashboard.py"),
-    ("conversations", "Conversations", "🗂", "pages/3_Conversations.py"),
-    ("knowledge_base", "Knowledge Base", "📚", "pages/1_Knowledge_Base.py"),
+    ("conversations", "Conversations", "▤", "pages/3_Conversations.py"),
+    ("knowledge_base", "Knowledge Base", "▦", "pages/1_Knowledge_Base.py"),
     ("analytics", "Analytics", "◔", "pages/4_Analytics.py"),
     ("settings", "Settings", "⚙", "pages/5_Settings.py"),
 ]
 
 
 def active_model() -> str:
-    return _MODEL_BY_PROVIDER.get(settings.llm_provider, "unknown model")
+    """HTML-escaped: every caller drops this straight into an
+    unsafe_allow_html block, and the value comes from an environment
+    variable (ANTHROPIC_MODEL / OPENAI_MODEL / GROQ_MODEL), not from a
+    fixed list — a typo'd or hostile .env shouldn't be able to inject
+    markup into every page's sidebar footer."""
+    return html.escape(_MODEL_BY_PROVIDER.get(settings.llm_provider, "unknown model"))
 
 
 def _apply_theme_toggle(key: str) -> None:
@@ -84,14 +98,19 @@ def render_theme_toggle(key: str = "theme_toggle") -> None:
 def render_header(title: str, subtitle: str = "", show_status: bool = True) -> None:
     """Left: page title (+ optional subtitle). Right: AI status + theme
     toggle. Rendered as a real Streamlit column row (not raw HTML) so the
-    toggle control can live inside it."""
+    toggle control can live inside it.
+
+    `title`/`subtitle` are escaped, so callers pass plain text (`&`, not
+    `&amp;`) and never markup."""
     left, right = st.columns([3, 2], vertical_alignment="center")
     with left:
+        safe_title = html.escape(title)
+        safe_subtitle = html.escape(subtitle)
         st.markdown(
             f"""
             <div class="page-header">
-                <div class="page-header-title">{title}</div>
-                {f'<div class="page-header-subtitle">{subtitle}</div>' if subtitle else ''}
+                <div class="page-header-title">{safe_title}</div>
+                {f'<div class="page-header-subtitle">{safe_subtitle}</div>' if subtitle else ''}
             </div>
             """,
             unsafe_allow_html=True,
@@ -146,24 +165,38 @@ def render_sidebar(active: str, kb_empty: bool | None = None) -> None:
 
         st.markdown('<div class="sidebar-section-label">Navigation</div>', unsafe_allow_html=True)
 
-        if st.button("＋  New Chat", key="nav_new_chat", use_container_width=True, type="primary"):
+        # A plain ASCII "+" (not the fullwidth "＋") — the fullwidth form is
+        # a CJK-width glyph sized for monospace/CJK text and renders
+        # noticeably oversized and misaligned next to Inter's proportional
+        # Latin glyphs.
+        if st.button("+ New Chat", key="nav_new_chat", width="stretch", type="primary"):
             st.session_state.messages = []
             st.session_state.pending_input = None
             st.switch_page("app.py")
 
-        st.markdown('<div class="nav-group">', unsafe_allow_html=True)
         for key, label, icon, path in NAV_ITEMS:
             if key == active:
-                st.markdown(
-                    f'<div class="nav-link active">{icon}&nbsp;&nbsp;{label}</div>',
-                    unsafe_allow_html=True,
+                # A disabled st.button, not a raw st.markdown div — Streamlit
+                # reserves a fixed ~26px layout slot for markdown-content
+                # containers regardless of what CSS padding later renders
+                # into them, so the div version visually overflowed ~14px
+                # into the next nav item's space (confirmed by inspecting
+                # the live DOM: the div's own ancestor flex wrapper measured
+                # 26px tall while the padded pill inside it rendered at
+                # 40px). st.button participates in Streamlit's normal
+                # widget sizing instead, which page_link already proved
+                # reserves the right amount of space.
+                st.button(
+                    f"{icon}  {label}",
+                    key=f"nav_active_{key}",
+                    disabled=True,
+                    width="stretch",
                 )
             else:
                 st.page_link(path, label=f"{icon}  {label}")
-        st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown('<div class="sidebar-divider"></div>', unsafe_allow_html=True)
-        st.markdown('<div class="sidebar-section-label">Knowledge base</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sidebar-section-label">Knowledge Base</div>', unsafe_allow_html=True)
         if kb_empty is None:
             kb_empty = collection_is_empty()
         if kb_empty:
