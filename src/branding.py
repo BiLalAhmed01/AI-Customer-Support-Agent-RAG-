@@ -22,153 +22,134 @@ FAVICON_DIR = ASSETS_DIR / "favicon"
 # ============================================================
 # Theme tokens
 #
-# Built from 5 fixed brand colors (forest/lilac/eggplant/mint/emerald,
-# exposed verbatim as --color-* below) by generating a real tint/shade
-# scale off them for backgrounds, surfaces, borders, and text — not just
-# swapping the 5 raw values in as text/background colors directly. Every
-# pairing that can carry text was checked against WCAG AA (4.5:1 normal
-# text, 3:1 large text / non-text UI) with a relative-luminance contrast
-# calculation, not eyeballed — a few consequences of that:
-#   - Raw --lilac (#B979E4) fails AA as small text on both theme's base
-#     backgrounds (3.83:1 dark, would be worse on light), so it's reserved
-#     for large text/icons/borders/focus-rings; `accent-strong` is a
-#     separate, darker/brighter text-safe variant for links and labels.
-#   - Raw --emerald (#07B45C) fails AA as text on light backgrounds
-#     (2.57:1) and only marginally clears non-text/dot thresholds
-#     elsewhere — it's a decorative/dot/icon color only, never a text
-#     color; status copy itself renders in text-primary/secondary.
+# Built from 4 fixed ORCHIS brand colors (primary blue / AI cyan / deep
+# navy / light blue, exposed verbatim as --color-* below) by deriving
+# backgrounds, surfaces, borders, and text from them per theme — not just
+# swapping the raw values in as text/background colors directly. Card
+# treatment is flat (white/elevated-navy fill + a real hairline border),
+# not neumorphic — the shadow-* tokens below are now single soft drop
+# shadows rather than the old dual-tone embossed pair, but keep their
+# original names so style.css didn't need to change shape, only values.
 # Every color-bearing rule in style.css reads these via var(--name), so
 # switching themes only ever means swapping which dict gets rendered into
 # the injected :root block below.
 # ============================================================
 
-# The 5 fixed brand colors, identical in both themes — exposed as their
-# own variables (not just baked into the derived tokens below) so
-# anything that specifically wants the raw brand color can reach it.
+# The 4 fixed ORCHIS brand colors, identical in both themes — exposed as
+# their own variables (not just baked into the derived tokens below) so
+# anything that specifically wants the raw brand color can reach it (e.g.
+# the ambient background glow, which blends both directly).
 _BRAND_COLORS: dict[str, str] = {
-    "color-forest": "#1D684A",
-    "color-lilac": "#B979E4",
-    "color-eggplant": "#3D325B",
-    "color-mint": "#5EC780",
-    "color-emerald": "#07B45C",
+    "color-primary-blue": "#2563EB",
+    "color-ai-cyan": "#06B6D4",
+    "color-deep-navy": "#0F172A",
+    "color-light-blue": "#E0F2FE",
 }
 
 LIGHT_THEME: dict[str, str] = {
     **_BRAND_COLORS,
 
-    # Soft lilac wash instead of pure white, per brief.
-    "bg": "#FAF7FE",
-    "surface": "#FDFBFF",
-    "surface-tint": "#F3EAFB",       # lilac wash — hover states, active nav
-    "surface-forest": "#E9F5EC",     # pale forest/mint tint — sidebar's distinct
-                                      # identity vs. the lilac-toned main pane,
-                                      # the light-mode echo of dark mode's forest
-                                      # sidebar (see DARK_THEME's surface-forest)
-    "border": "#E4D9F0",
-    "border-strong": "#D9C7EE",
+    "bg": "#F8FAFC",
+    "surface": "#FFFFFF",
+    "surface-tint": "#E0F2FE",       # light-blue wash — hover states, active nav
+    "surface-forest": "#FFFFFF",     # sidebar panel — white, distinct from the
+                                      # off-white page bg via border only
+    "border": "#E2E8F0",
+    "border-strong": "#CBD5E1",
 
-    "text-primary": "#241B36",
-    "text-secondary": "#5C5270",
-    "text-tertiary": "#756B87",      # 4.70:1 on bg — verified, not eyeballed
+    "text-primary": "#0F172A",
+    "text-secondary": "#64748B",
+    "text-tertiary": "#64748B",
 
-    "accent": "#B979E4",             # raw lilac — bg/border/icon use only
-    "accent-strong": "#8A3FBD",      # 5.61:1 on bg — text-safe lilac (links, labels)
-    "accent-on-accent": "#241B36",   # text color for lilac-filled buttons (5.29:1)
-    "accent-tint": "#F3EAFB",
-    "accent-tint-strong": "#E8D2F7",
+    "accent": "#2563EB",             # primary blue — CTAs, links, selected states
+    "accent-strong": "#1D4ED8",      # hover — slightly darker blue
+    "accent-on-accent": "#FFFFFF",   # text color on blue-filled buttons
+    "accent-tint": "#E0F2FE",
+    "accent-tint-strong": "#D5EAF8",
+    "ai-accent": "#06B6D4",          # decorative only (glow rings, washes) —
+                                      # fails AA/non-text contrast as a light-mode
+                                      # foreground, see ai-accent-text below
+    "ai-accent-text": "#0E7490",     # 4.67:1+ on light surfaces — AI status/
+                                      # processing dots and icons that need to
+                                      # actually read against a light background
+    "ai-surface": "#E0F2FE",         # AI message bubble fill (distinct from
+                                      # plain white cards elsewhere)
 
-    "status-online": "#07B45C",      # dot/icon only — see module docstring
-    "status-online-text": "#0A7A3E", # 5.12:1 on bg — for status copy, not the dot
-    "status-warn": "#96600F",        # 4.98:1 on bg — safe as text too
-    "status-error": "#C4483B",       # 4.57:1 on bg — safe as text too
-    "status-online-bg": "rgba(7, 180, 92, 0.10)",
-    "status-warn-bg": "rgba(150, 96, 15, 0.10)",
-    "status-error-bg": "rgba(196, 72, 59, 0.10)",
-    "status-online-ring": "rgba(7, 180, 92, 0.16)",
+    "status-online": "#10B981",
+    "status-online-text": "#047857", # 5.24:1 on bg — #059669 (3.60:1) fails AA
+    "status-warn": "#B45309",
+    "status-error": "#DC2626",
+    "status-online-bg": "rgba(16, 185, 129, 0.10)",
+    "status-warn-bg": "rgba(180, 83, 9, 0.10)",
+    "status-error-bg": "rgba(220, 38, 38, 0.10)",
+    "status-online-ring": "rgba(16, 185, 129, 0.16)",
 
-    "shadow-md": "0 8px 24px rgba(61, 50, 91, 0.10)",
-    "focus-ring": "rgba(185, 121, 228, 0.35)",
+    "shadow-md": "0 8px 24px rgba(15, 23, 42, 0.10)",
+    "focus-ring": "rgba(37, 99, 235, 0.35)",
 
-    # Neumorphism tokens. The defining trait (and the thing that makes it
-    # look wrong if got wrong) is that a "card" is the *same* color as the
-    # surface it sits on — depth comes entirely from a matched pair of
-    # soft shadows (a highlight up-left, a shadow down-right), never from
-    # a different fill color or a hard border. surface-neu is therefore
-    # set equal to bg, not a step away from it like the old surface/
-    # surface-tint tokens. shadow-raised is the resting "embossed" state;
-    # shadow-pressed (inset, same two colors) is for anything that should
-    # read as pushed in — the chat input, a toggle's track, a button's
-    # :active state — so press interactions look like something real
-    # physically depressing rather than just a color swap. A very
-    # low-opacity neu-border is included despite pure neumorphism
-    # avoiding borders entirely: at this text scale, shadow-only edges
-    # were too faint to reliably tell where one card ends and the next
-    # begins, which is the classic, well-documented usability failure
-    # mode of the style — a hairline assist keeps it accessible without
-    # visually reading as a "bordered card."
-    "surface-neu": "#FAF7FE",
-    "neu-light": "rgba(255, 255, 255, 0.9)",
-    "neu-dark": "rgba(163, 150, 195, 0.55)",
-    "neu-border": "rgba(61, 50, 91, 0.05)",
-    "shadow-raised": "6px 6px 16px rgba(163, 150, 195, 0.5), -6px -6px 16px rgba(255, 255, 255, 0.9)",
-    "shadow-raised-sm": "3px 3px 8px rgba(163, 150, 195, 0.45), -3px -3px 8px rgba(255, 255, 255, 0.85)",
-    # A deeper version of shadow-raised (bigger offset/blur, same two
-    # colors) for hover states on cards — lifting a raised shape further
-    # off the surface, not swapping its color, is what "hover" should
-    # mean in a system where color never carried the depth cue.
-    "shadow-raised-lg": "10px 10px 24px rgba(163, 150, 195, 0.55), -8px -8px 20px rgba(255, 255, 255, 0.95)",
-    "shadow-pressed": "inset 4px 4px 10px rgba(163, 150, 195, 0.45), inset -4px -4px 10px rgba(255, 255, 255, 0.8)",
+    # Flat-card tokens. A "card" is a solid white fill on the off-white
+    # page background, separated by a real hairline border plus a single
+    # soft, low-opacity shadow for a touch of lift — the restrained,
+    # premium-SaaS treatment the brief calls for, not an embossed
+    # neumorphic surface. shadow-pressed (inset) is reserved for controls
+    # that should read as "carved in" (the chat input, a toggle's track,
+    # a button's :active state).
+    "surface-neu": "#FFFFFF",
+    "neu-light": "rgba(255, 255, 255, 0.6)",
+    "neu-dark": "rgba(15, 23, 42, 0.08)",
+    "neu-border": "#E2E8F0",
+    "shadow-raised": "0 1px 2px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(15, 23, 42, 0.06)",
+    "shadow-raised-sm": "0 1px 2px rgba(15, 23, 42, 0.05)",
+    "shadow-raised-lg": "0 6px 16px rgba(15, 23, 42, 0.10)",
+    "shadow-pressed": "inset 0 1px 2px rgba(15, 23, 42, 0.06)",
 }
 
 DARK_THEME: dict[str, str] = {
     **_BRAND_COLORS,
 
-    # Eggplant as the deepest/base surface (per brief), with forest used
-    # sparingly as a distinct, darker contrast panel — e.g. the sidebar
-    # reads as a different, cooler surface than the main chat pane
-    # instead of just a lighter/darker shade of the same hue.
-    "bg": "#3D325B",
-    "surface": "#4A3D6E",            # one step up — cards, message bubbles
-    "surface-tint": "rgba(185, 121, 228, 0.10)",  # hover/active wash
-    "surface-forest": "#12271D",     # sidebar contrast panel (forest, darkened)
-    "border": "rgba(185, 121, 228, 0.16)",
-    "border-strong": "rgba(185, 121, 228, 0.28)",
+    "bg": "#0B1120",
+    "surface": "#0F172A",
+    "surface-tint": "rgba(37, 99, 235, 0.12)",   # blue wash — hover/active
+    "surface-forest": "#0F172A",                 # sidebar panel
+    "border": "#263449",
+    "border-strong": "#33455F",
 
-    "text-primary": "#F4EFFB",
-    "text-secondary": "#C9BEDE",
-    "text-tertiary": "#ABA0C6",       # 4.75:1 on bg — verified, not eyeballed
+    "text-primary": "#F8FAFC",
+    "text-secondary": "#94A3B8",
+    "text-tertiary": "#94A3B8",
 
-    "accent": "#B979E4",              # raw lilac — bg/border/icon use only
-    "accent-strong": "#D2A6F0",        # 5.79:1 on bg — text-safe lilac (links, labels)
-    "accent-on-accent": "#241B36",    # text color for lilac-filled buttons (5.29:1)
-    "accent-tint": "rgba(185, 121, 228, 0.16)",
-    "accent-tint-strong": "rgba(185, 121, 228, 0.26)",
+    "accent": "#2563EB",              # primary blue stays consistent across themes
+    "accent-strong": "#60A5FA",       # lighter blue — text-safe on dark surfaces
+    "accent-on-accent": "#FFFFFF",
+    "accent-tint": "rgba(37, 99, 235, 0.16)",
+    "accent-tint-strong": "rgba(37, 99, 235, 0.26)",
+    "ai-accent": "#06B6D4",
+    "ai-accent-text": "#06B6D4",      # raw cyan already clears AA (6.7-7.8:1) on dark surfaces
+    "ai-surface": "#172033",          # elevated surface — AI bubble + source/RAG cards
 
-    "status-online": "#07B45C",       # dot/icon only — see module docstring
-    "status-online-text": "#5EC780",  # 8.51:1 on bg — for status copy, not the dot
-    "status-warn": "#E3A857",         # 5.54:1 on bg
-    "status-error": "#EA7A6C",        # 4.15:1 on bg (large/UI text weight)
-    "status-online-bg": "rgba(7, 180, 92, 0.16)",
+    "status-online": "#10B981",
+    "status-online-text": "#34D399",
+    "status-warn": "#E3A857",
+    "status-error": "#F87171",
+    "status-online-bg": "rgba(16, 185, 129, 0.16)",
     "status-warn-bg": "rgba(227, 168, 87, 0.14)",
-    "status-error-bg": "rgba(234, 122, 108, 0.14)",
-    "status-online-ring": "rgba(7, 180, 92, 0.24)",
+    "status-error-bg": "rgba(248, 113, 113, 0.14)",
+    "status-online-ring": "rgba(16, 185, 129, 0.24)",
 
-    "shadow-md": "0 8px 28px rgba(10, 6, 18, 0.45), 0 0 0 1px rgba(185, 121, 228, 0.08)",
-    "focus-ring": "rgba(185, 121, 228, 0.40)",
+    "shadow-md": "0 8px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(37, 99, 235, 0.08)",
+    "focus-ring": "rgba(6, 182, 212, 0.40)",
 
-    # See LIGHT_THEME's neumorphism comment for the general approach.
-    # Dark mode's shadow pair is a lighter lilac lift off the eggplant
-    # base (not white — a literal white highlight would read as a
-    # light-mode leak) paired with a near-black shadow, rather than the
-    # light theme's white-highlight/muted-lavender-shadow pair.
-    "surface-neu": "#3D325B",
-    "neu-light": "rgba(150, 125, 195, 0.22)",
-    "neu-dark": "rgba(15, 10, 25, 0.55)",
-    "neu-border": "rgba(185, 121, 228, 0.08)",
-    "shadow-raised": "6px 6px 16px rgba(15, 10, 25, 0.55), -6px -6px 16px rgba(150, 125, 195, 0.18)",
-    "shadow-raised-sm": "3px 3px 8px rgba(15, 10, 25, 0.5), -3px -3px 8px rgba(150, 125, 195, 0.15)",
-    "shadow-raised-lg": "10px 10px 24px rgba(15, 10, 25, 0.6), -8px -8px 20px rgba(150, 125, 195, 0.22)",
-    "shadow-pressed": "inset 4px 4px 10px rgba(15, 10, 25, 0.5), inset -4px -4px 10px rgba(150, 125, 195, 0.15)",
+    # Elevated surface (#172033) stands in for the old neumorphic
+    # surface-neu — cards read as a distinct, lighter panel against the
+    # deep navy base via fill + border, not an embossed shadow pair.
+    "surface-neu": "#172033",
+    "neu-light": "rgba(148, 163, 184, 0.10)",
+    "neu-dark": "rgba(0, 0, 0, 0.5)",
+    "neu-border": "#263449",
+    "shadow-raised": "0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.35)",
+    "shadow-raised-sm": "0 1px 2px rgba(0, 0, 0, 0.3)",
+    "shadow-raised-lg": "0 8px 20px rgba(0, 0, 0, 0.4)",
+    "shadow-pressed": "inset 0 1px 2px rgba(0, 0, 0, 0.4)",
 }
 
 

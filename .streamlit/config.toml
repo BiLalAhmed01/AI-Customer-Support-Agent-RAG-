@@ -7,10 +7,10 @@
 # below are Orchis's actual brand tokens so native widgets read as
 # on-brand rather than a leftover default.
 base = "light"
-primaryColor = "#B979E4"
-backgroundColor = "#FAF7FE"
-secondaryBackgroundColor = "#F3EAFB"
-textColor = "#241B36"
+primaryColor = "#2563EB"
+backgroundColor = "#F8FAFC"
+secondaryBackgroundColor = "#E0F2FE"
+textColor = "#0F172A"
 font = "sans serif"
 
 [browser]
