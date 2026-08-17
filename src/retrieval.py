@@ -18,6 +18,7 @@ import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 
+from chromadb.errors import NotFoundError
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 
@@ -95,12 +96,25 @@ def _get_vectorstore() -> Chroma:
     )
 
 
+def _with_reconnect(op):
+    """Run `op` against the cached vectorstore; if the underlying collection
+    is gone (e.g. another process ran `ingest --reset`, or the persisted
+    Chroma DB was wiped on disk, after this process already cached a handle
+    to the old collection), drop the stale cache and retry once against a
+    freshly opened connection instead of surfacing a NotFoundError."""
+    try:
+        return op(_get_vectorstore())
+    except NotFoundError:
+        _get_vectorstore.cache_clear()
+        return op(_get_vectorstore())
+
+
 def collection_is_empty() -> bool:
     return collection_count() == 0
 
 
 def collection_count() -> int:
-    return _get_vectorstore()._collection.count()
+    return _with_reconnect(lambda vs: vs._collection.count())
 
 
 def list_indexed_sources() -> dict[str, int]:
@@ -110,7 +124,7 @@ def list_indexed_sources() -> dict[str, int]:
     there, the same way collection_count() does."""
     if collection_is_empty():
         return {}
-    data = _get_vectorstore()._collection.get(include=["metadatas"])
+    data = _with_reconnect(lambda vs: vs._collection.get(include=["metadatas"]))
     counts: dict[str, int] = {}
     for meta in data["metadatas"]:
         source = meta.get("source", "unknown")
@@ -207,11 +221,10 @@ def retrieve(
             debug.candidates_kept = 0
         return []
 
-    vectorstore = _get_vectorstore()
     fetch_k = max(settings.fetch_k, k)
 
-    candidates: list[tuple[Document, float]] = vectorstore.similarity_search_with_score(
-        search_query, k=fetch_k
+    candidates: list[tuple[Document, float]] = _with_reconnect(
+        lambda vs: vs.similarity_search_with_score(search_query, k=fetch_k)
     )
 
     if debug is not None:
