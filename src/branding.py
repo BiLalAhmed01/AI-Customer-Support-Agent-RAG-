@@ -211,17 +211,17 @@ _MARK_SOURCE = ASSETS_DIR / "orchis-mark.png"
 
 @lru_cache(maxsize=None)
 def _mark_data_uri(size: int) -> str:
-    """Re-encodes the 1024px master mark at the exact display size, once
-    per distinct size ever requested (there are only three call sites —
-    26px avatar, 34px sidebar mark, 72px hero — so this cache never grows
-    past a handful of entries).
+    """Re-encodes the high-resolution master mark at the exact display
+    size, once per distinct size ever requested (there are only three call
+    sites — 26px avatar, 34px sidebar mark, 72px hero — so this cache
+    never grows past a handful of entries).
 
-    This matters for more than tidiness: the master PNG is ~500KB, and the
-    chat avatar re-renders it on every message. Inlining the full-res file
-    as a base64 data URI at 26px would ship ~660KB of base64 text per
-    message bubble — a real, compounding page-weight cost as a
-    conversation grows. Re-encoding at the actual display size keeps each
-    inlined copy in the low single-digit KB.
+    This matters for more than tidiness: the master PNG is multiple
+    megabytes, and the chat avatar re-renders it on every message.
+    Inlining the full-res file as a base64 data URI at 26px would ship
+    that entire encoded size per message bubble — a real, compounding
+    page-weight cost as a conversation grows. Re-encoding at the actual
+    display size keeps each inlined copy in the low single-digit KB.
     """
     from io import BytesIO
 

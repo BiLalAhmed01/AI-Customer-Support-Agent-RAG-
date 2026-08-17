@@ -10,6 +10,7 @@ import html
 
 import streamlit as st
 
+from src.auth import require_access
 from src.branding import FAVICON_DIR, inject_favicon_metadata, inject_theme_css
 from src.ui import render_header, render_sidebar
 
@@ -21,6 +22,7 @@ st.set_page_config(
 
 inject_theme_css()
 inject_favicon_metadata("conversations")
+require_access()
 
 render_sidebar(active="conversations")
 render_header("Conversations", "Current session")

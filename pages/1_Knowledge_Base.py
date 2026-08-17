@@ -8,13 +8,16 @@ the CLI uses.
 """
 
 import html
+from functools import lru_cache
 from pathlib import Path
 
 import streamlit as st
 
+from src.auth import require_access
 from src.branding import FAVICON_DIR, inject_favicon_metadata, inject_theme_css
 from src.config import settings
-from src.ingest import SUPPORTED_EXTENSIONS, ingest
+from src.ingest import SUPPORTED_EXTENSIONS, delete_document, ingest
+from src.ratelimit import check_upload_rate_limit
 from src.retrieval import collection_count, list_indexed_sources
 from src.ui import render_header, render_sidebar
 
@@ -26,6 +29,7 @@ st.set_page_config(
 
 inject_theme_css()
 inject_favicon_metadata("knowledge_base")
+require_access()
 
 DOCS_DIR = Path(settings.docs_dir)
 
@@ -34,8 +38,10 @@ DOCS_DIR = Path(settings.docs_dir)
 # filter and a client-side check only — it does not stop a crafted POST to
 # Streamlit's upload endpoint from carrying any filename and any bytes, so
 # the real validation has to happen here, before anything is written to
-# disk.
-MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+# disk. settings.max_upload_mb lives in src/config.py alongside every
+# other tunable; it's also mirrored in .streamlit/config.toml's
+# server.maxUploadSize (see that setting's comment for why both exist).
+MAX_UPLOAD_BYTES = settings.max_upload_mb * 1024 * 1024
 
 
 def safe_destination(raw_name: str) -> Path:
@@ -73,10 +79,18 @@ def safe_destination(raw_name: str) -> Path:
     return dest
 
 
-def _probe_readability(path: Path) -> tuple[bool, str]:
-    """Read-only check using the exact same loader classes src/ingest.py
-    uses for real ingestion — if this fails, ingestion would fail on this
-    file too, so the signal is genuine, not guessed."""
+@lru_cache(maxsize=64)
+def _probe_readability_cached(path_str: str, mtime_ns: int, size: int) -> tuple[bool, str]:
+    """The actual probe, cached on (path, mtime, size) — get_documents()
+    calls this on every single page rerun for every not-yet-indexed file
+    (nav clicks, button presses, anything that triggers a Streamlit rerun
+    while a doc is still "processing"), and it fully parses the file
+    (a real PDF/text load, not a cheap check) each time. Keying on mtime+
+    size rather than just the path means a re-uploaded/edited file with
+    the same name still gets re-probed, while an unchanged file — the
+    common case while sitting in "processing" — reuses the prior result
+    instead of re-parsing on every rerun."""
+    path = Path(path_str)
     try:
         if path.suffix.lower() == ".pdf":
             from langchain_community.document_loaders import PyPDFLoader
@@ -87,6 +101,14 @@ def _probe_readability(path: Path) -> tuple[bool, str]:
         return True, ""
     except Exception as exc:
         return False, str(exc)
+
+
+def _probe_readability(path: Path) -> tuple[bool, str]:
+    """Read-only check using the exact same loader classes src/ingest.py
+    uses for real ingestion — if this fails, ingestion would fail on this
+    file too, so the signal is genuine, not guessed."""
+    stat = path.stat()
+    return _probe_readability_cached(str(path), stat.st_mtime_ns, stat.st_size)
 
 
 def _format_size(num_bytes: int) -> str:
@@ -248,6 +270,33 @@ else:
                 unsafe_allow_html=True,
             )
 
+        # Two-click confirm (arm, then confirm) rather than a single
+        # button, since this is a destructive action with no undo —
+        # removes the document's chunks from the vector store and its
+        # file from disk (see src/ingest.py's delete_document()).
+        confirm_key = f"kb_confirm_delete_{doc['name']}"
+        if st.session_state.get(confirm_key):
+            st.warning(f"Remove **{doc['name']}** from the knowledge base? This can't be undone.")
+            cols = st.columns([1, 1, 4], gap="small")
+            with cols[0]:
+                if st.button("Confirm remove", key=f"kb_do_delete_{doc['name']}", type="primary"):
+                    removed = delete_document(doc["name"])
+                    st.session_state.pop(confirm_key, None)
+                    st.session_state.kb_upload_result = (
+                        "success" if removed else "error",
+                        f"Removed {doc['name']}." if removed
+                        else f"Nothing to remove for {doc['name']}.",
+                    )
+                    st.rerun()
+            with cols[1]:
+                if st.button("Cancel", key=f"kb_cancel_delete_{doc['name']}"):
+                    st.session_state.pop(confirm_key, None)
+                    st.rerun()
+        else:
+            if st.button("Remove", key=f"kb_remove_{doc['name']}"):
+                st.session_state[confirm_key] = True
+                st.rerun()
+
 # ---------- Add Knowledge Source ----------
 st.markdown('<div class="section-heading">Add Knowledge Source</div>', unsafe_allow_html=True)
 st.markdown('<div class="upload-panel">', unsafe_allow_html=True)
@@ -277,6 +326,12 @@ if uploaded_files:
                         f"{_format_size(len(data))} exceeds the "
                         f"{_format_size(MAX_UPLOAD_BYTES)} per-file limit"
                     )
+                # Cumulative-per-session cap, on top of the per-file limit
+                # above — bounds repeated uploads filling the disk over
+                # time, not just a single oversized file.
+                rate_ok, rate_message = check_upload_rate_limit(len(data))
+                if not rate_ok:
+                    raise ValueError(rate_message)
                 dest = safe_destination(f.name)
             except ValueError as exc:
                 rejected.append(f"{f.name}: {exc}")

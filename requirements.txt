@@ -3,6 +3,18 @@ langchain-community>=0.3.0
 langchain-anthropic>=0.3.0
 langchain-openai>=0.2.0
 langchain-chroma>=0.1.4
+# Imported directly (src/llm.py, src/retrieval.py, src/ingest.py) rather
+# than only relied on transitively through the packages above — pinned
+# explicitly so a future langchain/langchain-community release can't drop
+# them as a dependency out from under this app.
+langchain-core>=0.3.0
+langchain-text-splitters>=0.3.0
+# HuggingFaceEmbeddings' maintained home — the langchain_community.embeddings
+# version (src/embeddings.py used to import from there) is deprecated and
+# scheduled for removal from langchain-community. Verified bit-identical
+# embedding output between the two before switching (same underlying
+# sentence-transformers call, just a different wrapping package).
+langchain-huggingface>=0.1.0
 chromadb>=0.5.0
 sentence-transformers>=3.0.0
 Pillow>=10.0.0
@@ -13,4 +25,3 @@ pypdf>=4.0.0
 # against the replacement rather than the deprecated form.
 streamlit>=1.49.0
 python-dotenv>=1.0.0
-tiktoken>=0.7.0

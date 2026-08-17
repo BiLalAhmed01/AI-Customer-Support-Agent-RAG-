@@ -65,5 +65,62 @@ class Settings:
     chunk_size: int = int(os.getenv("CHUNK_SIZE", "500"))
     chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", "75"))
 
+    # Kept modest on purpose: shorter completions finish faster and support
+    # answers rarely need more than this to be complete.
+    max_output_tokens: int = int(os.getenv("MAX_OUTPUT_TOKENS", "600"))
+
+    # Hard ceiling on a single LLM request. Without this, a stalled
+    # connection to the provider hangs indefinitely instead of failing
+    # predictably — the UI has no way to recover from a request that
+    # never resolves either way.
+    request_timeout_seconds: int = int(os.getenv("REQUEST_TIMEOUT_SECONDS", "30"))
+
+    # Per-file cap on Knowledge Base uploads. Mirrored by
+    # .streamlit/config.toml's server.maxUploadSize, which bounds what the
+    # server accepts at all — this is enforced again here since that
+    # setting isn't read from Python.
+    max_upload_mb: int = int(os.getenv("MAX_UPLOAD_MB", "10"))
+
+    # Most recent messages (user + assistant combined) sent to the LLM as
+    # conversation history, on top of the current question. Unbounded
+    # history was a real audit finding: token cost per turn grew linearly
+    # with conversation length, and a long enough session eventually
+    # exceeds the model's context window outright. 16 (~8 exchanges) keeps
+    # follow-up questions coherent without that growth — chosen as a
+    # reasonable default, not measured against real conversation data.
+    max_history_messages: int = int(os.getenv("MAX_HISTORY_MESSAGES", "16"))
+
+    # Shared-passcode gate (src/auth.py). Empty (the default) disables it
+    # entirely — this app shipped with zero authentication anywhere, so a
+    # non-empty default here would silently lock out every existing
+    # deployment the moment this code lands. Opt in by setting
+    # APP_ACCESS_CODE before deploying anywhere the knowledge-base upload
+    # page or the chat itself shouldn't be open to the public internet.
+    access_code: str = os.getenv("APP_ACCESS_CODE", "")
+
+    # Chat messages allowed per session per rolling window (src/ratelimit.py).
+    # 0 disables the limit.
+    chat_rate_limit_count: int = int(os.getenv("CHAT_RATE_LIMIT_COUNT", "20"))
+    chat_rate_limit_window_seconds: int = int(
+        os.getenv("CHAT_RATE_LIMIT_WINDOW_SECONDS", "60")
+    )
+
+    # Cumulative Knowledge Base upload volume allowed per session, on top
+    # of the existing per-file max_upload_mb cap. 0 disables the limit.
+    upload_rate_limit_mb: int = int(os.getenv("UPLOAD_RATE_LIMIT_MB", "50"))
+    upload_rate_limit_window_seconds: int = int(
+        os.getenv("UPLOAD_RATE_LIMIT_WINDOW_SECONDS", "3600")
+    )
+
+    # Most recent messages rendered on the Chat page by default. The full
+    # transcript is always kept in session state (Regenerate, Dashboard's
+    # counts, and the Conversations page still see everything) — this only
+    # bounds how much HTML app.py builds and re-renders on every rerun,
+    # which otherwise grows without limit as a conversation gets long.
+    # Older messages are still reachable via an in-page "Show earlier
+    # messages" control, not deleted. 0 disables the window (render
+    # everything, matching the app's original behavior).
+    chat_display_window: int = int(os.getenv("CHAT_DISPLAY_WINDOW", "60"))
+
 
 settings = Settings()

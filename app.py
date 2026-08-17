@@ -10,6 +10,7 @@ from pathlib import Path
 
 import streamlit as st
 
+from src.auth import require_access
 from src.branding import (
     FAVICON_DIR,
     brand_hero,
@@ -20,6 +21,7 @@ from src.branding import (
 )
 from src.config import settings
 from src.llm import prepare_answer_stream
+from src.ratelimit import check_chat_rate_limit
 from src.retrieval import collection_is_empty
 from src.ui import render_header, render_sidebar
 
@@ -32,6 +34,7 @@ st.set_page_config(
 
 inject_theme_css()
 inject_favicon_metadata("chat")
+require_access()
 install_copy_handler()
 
 DOCS_DIR = Path(__file__).parent / "data" / "docs"
@@ -78,10 +81,22 @@ def _escape(text: str) -> str:
 
 def _is_timeout_error(exc: Exception) -> bool:
     """Distinguish a timeout from other failures so the user gets an
-    honest, specific message instead of a generic connection error."""
+    honest, specific message instead of a generic connection error.
+
+    Explicit isinstance checks for both SDKs actually in use here
+    (Anthropic is the default provider — src/config.py — so its timeout
+    type needs the same direct check OpenAI's already had, not just the
+    string-matching fallback below). Groq goes through the OpenAI client
+    (src/llm.py), so no separate Groq check is needed."""
     try:
         import openai
         if isinstance(exc, openai.APITimeoutError):
+            return True
+    except ImportError:
+        pass
+    try:
+        import anthropic
+        if isinstance(exc, anthropic.APITimeoutError):
             return True
     except ImportError:
         pass
@@ -120,8 +135,8 @@ def render_processing_state(label: str) -> str:
         '<div class="msg-row assistant"><div class="msg-inner">'
         f'<div class="avatar">{brand_mark(26)}</div>'
         f'<div class="msg-bubble processing">'
-        f'<span class="processing-icon">✦</span> {html.escape(label)}'
-        '<span class="typing-dots"><span></span><span></span><span></span></span>'
+        f'<span class="processing-icon" aria-hidden="true">✦</span> {html.escape(label)}'
+        '<span class="typing-dots" aria-hidden="true"><span></span><span></span><span></span></span>'
         '</div></div></div>'
     )
 
@@ -136,7 +151,7 @@ def render_sources_toggle(sources: list[str], candidates: list[dict] | None) -> 
     kept = [c for c in (candidates or []) if c.get("kept")]
     if kept:
         items = "".join(
-            f'<div class="source-item"><span class="doc-icon-tiny">📄</span>'
+            f'<div class="source-item"><span class="doc-icon-tiny" aria-hidden="true">📄</span>'
             f'{html.escape(c["source"])}'
             f'<span class="source-score">match {c["rerank_score"]:.1f}</span></div>'
             for c in kept
@@ -144,7 +159,7 @@ def render_sources_toggle(sources: list[str], candidates: list[dict] | None) -> 
         count = len(kept)  # matches the passages actually listed below
     else:
         items = "".join(
-            f'<div class="source-item"><span class="doc-icon-tiny">📄</span>{html.escape(s)}</div>'
+            f'<div class="source-item"><span class="doc-icon-tiny" aria-hidden="true">📄</span>{html.escape(s)}</div>'
             for s in sources
         )
         count = len(sources)
@@ -176,7 +191,7 @@ def render_rag_trace(used_retrieval: bool, candidates: list[dict] | None) -> str
     step_html = ""
     for i, (label, active) in enumerate(steps):
         cls = "rag-step" if active else "rag-step skipped"
-        step_html += f'<div class="{cls}"><span class="rag-dot"></span>{html.escape(label)}</div>'
+        step_html += f'<div class="{cls}"><span class="rag-dot" aria-hidden="true"></span>{html.escape(label)}</div>'
         if i < len(steps) - 1:
             step_html += '<div class="rag-arrow">↓</div>'
 
@@ -345,7 +360,7 @@ if kb_empty:
     st.markdown(
         """
         <div class="kb-status-card warn">
-            <span class="kb-dot"></span>
+            <span class="kb-dot" aria-hidden="true"></span>
             Knowledge base is empty — run <code>python -m src.ingest</code> after
             adding documents to <code>data/docs/</code> before asking questions.
         </div>
@@ -379,7 +394,33 @@ if not st.session_state.messages and not incoming_input and not kb_empty:
         st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------- Render existing conversation ----------
-for i, message in enumerate(st.session_state.messages):
+# Bounded to settings.chat_display_window messages by default — the full
+# transcript stays in st.session_state.messages (Regenerate's index math
+# below, Dashboard's counts, and the Conversations page all still see
+# everything); this only bounds how much HTML gets rebuilt on every
+# rerun, which otherwise grows without limit as a conversation gets long.
+# `start_index` is preserved as the real offset into the full list so
+# Regenerate (keyed and indexed by absolute position) keeps working
+# unchanged for whichever messages are actually visible.
+all_messages = st.session_state.messages
+window = settings.chat_display_window
+start_index = 0
+if window > 0 and len(all_messages) > window:
+    hidden_count = len(all_messages) - window
+    if st.session_state.get("_show_all_messages"):
+        start_index = 0
+    else:
+        start_index = hidden_count
+        if st.button(
+            f"Show {hidden_count} earlier message{'s' if hidden_count != 1 else ''}",
+            key="show_earlier_messages",
+        ):
+            st.session_state._show_all_messages = True
+            st.rerun()
+
+visible_messages = all_messages[start_index:]
+
+for i, message in enumerate(visible_messages, start=start_index):
     st.markdown(render_message(message["role"], message["content"], message.get("error")), unsafe_allow_html=True)
     if message["role"] == "assistant" and not message.get("error"):
         candidates = message.get("debug_candidates")
@@ -402,12 +443,37 @@ if user_input:
     st.session_state.messages.append({"role": "user", "content": user_input})
     st.markdown(render_message("user", user_input), unsafe_allow_html=True)
 
+    # Capping (settings.max_history_messages) happens inside
+    # prepare_answer_stream via src/llm.py's cap_history() — the full
+    # session transcript is passed through here so it stays visible in the
+    # UI (st.session_state.messages is untouched); only what the model
+    # actually sees is bounded.
     history = [
         {"role": m["role"], "content": m["content"]}
         for m in st.session_state.messages[:-1]
     ]
 
     placeholder = st.empty()
+
+    rate_ok, rate_message = check_chat_rate_limit()
+    if not rate_ok:
+        # Rejected before the pipeline ever runs — no LLM call, no
+        # retrieval, no cost incurred for a rate-limited request.
+        placeholder.markdown(render_message("assistant", rate_message), unsafe_allow_html=True)
+        st.session_state.messages.append(
+            {
+                "role": "assistant",
+                "content": rate_message,
+                "sources": [],
+                "error": False,
+                "used_retrieval": False,
+                "debug_candidates": None,
+                "raw_debug": None,
+                "feedback": None,
+            }
+        )
+        st.rerun()
+
     placeholder.markdown(render_processing_state("Understanding your question"), unsafe_allow_html=True)
 
     debug_info = None

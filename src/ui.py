@@ -88,7 +88,7 @@ def render_theme_toggle(key: str = "theme_toggle") -> None:
     with st.container(key=f"theme_toggle_group_{key}"):
         cols = st.columns([1, 2.6, 1], gap="small", vertical_alignment="center")
         with cols[0]:
-            st.markdown('<span class="theme-icon sun">☀</span>', unsafe_allow_html=True)
+            st.markdown('<span class="theme-icon sun" aria-hidden="true">☀</span>', unsafe_allow_html=True)
         with cols[1]:
             st.toggle(
                 "Dark mode",
@@ -98,7 +98,7 @@ def render_theme_toggle(key: str = "theme_toggle") -> None:
                 args=(key,),
             )
         with cols[2]:
-            st.markdown('<span class="theme-icon moon">☾</span>', unsafe_allow_html=True)
+            st.markdown('<span class="theme-icon moon" aria-hidden="true">☾</span>', unsafe_allow_html=True)
 
 
 def render_header(title: str, subtitle: str = "", show_status: bool = True) -> None:
@@ -128,7 +128,7 @@ def render_header(title: str, subtitle: str = "", show_status: bool = True) -> N
             with cols[0]:
                 st.markdown(
                     '<div class="status-pill" style="margin-left:auto;">'
-                    '<span class="dot"></span> AI ONLINE</div>',
+                    '<span class="dot" aria-hidden="true"></span> AI ONLINE</div>',
                     unsafe_allow_html=True,
                 )
         with cols[1]:
@@ -207,13 +207,13 @@ def render_sidebar(active: str, kb_empty: bool | None = None) -> None:
             kb_empty = collection_is_empty()
         if kb_empty:
             st.markdown(
-                '<div class="kb-mini-status warn"><span class="kb-mini-dot"></span> Not connected</div>',
+                '<div class="kb-mini-status warn"><span class="kb-mini-dot" aria-hidden="true"></span> Not connected</div>',
                 unsafe_allow_html=True,
             )
         else:
             count = collection_count()
             st.markdown(
-                f'<div class="kb-mini-status"><span class="kb-mini-dot"></span> '
+                f'<div class="kb-mini-status"><span class="kb-mini-dot" aria-hidden="true"></span> '
                 f'Indexed &middot; {count} chunk{"s" if count != 1 else ""}</div>',
                 unsafe_allow_html=True,
             )
@@ -222,7 +222,7 @@ def render_sidebar(active: str, kb_empty: bool | None = None) -> None:
         st.markdown(
             f"""
             <div class="sidebar-footer">
-                <div class="sidebar-footer-status"><span class="dot"></span> AI SYSTEM ONLINE</div>
+                <div class="sidebar-footer-status"><span class="dot" aria-hidden="true"></span> AI SYSTEM ONLINE</div>
                 <div class="sidebar-footer-model">{active_model()}</div>
             </div>
             """,

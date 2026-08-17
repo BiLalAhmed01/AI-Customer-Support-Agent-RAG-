@@ -10,6 +10,7 @@ reported honestly rather than invented.
 
 import streamlit as st
 
+from src.auth import require_access
 from src.branding import FAVICON_DIR, inject_favicon_metadata, inject_theme_css
 from src.retrieval import collection_count, collection_is_empty, list_indexed_sources
 from src.ui import active_model, render_header, render_sidebar
@@ -22,6 +23,7 @@ st.set_page_config(
 
 inject_theme_css()
 inject_favicon_metadata("dashboard")
+require_access()
 
 kb_empty = collection_is_empty()
 doc_count = len(list_indexed_sources())
