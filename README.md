@@ -10,7 +10,7 @@ entirely — the agent says so instead of guessing or falling back on general
 world knowledge.
 
 Beyond the RAG pipeline itself, this repo is also a full product surface: a
-custom neumorphic design system with light/dark theming and WCAG-verified
+custom blue/cyan design system with light/dark theming and WCAG-verified
 contrast, a 6-page admin app (chat, dashboard, knowledge base management,
 conversations, analytics, settings), and a security-audited upload/ingestion
 path. The **Design system**, **Security**, and **Engineering approach**
@@ -156,40 +156,39 @@ prompt construction on the next turn.
 
 ## Design system
 
-The palette is 5 fixed brand colors — forest `#1D684A`, lilac `#B979E4`,
-eggplant `#3D325B`, mint `#5EC780`, emerald `#07B45C` — exposed verbatim as
+The palette is 4 fixed brand colors — primary blue `#2563EB`, AI cyan
+`#06B6D4`, deep navy `#0F172A`, light blue `#E0F2FE` — exposed verbatim as
 `--color-*` custom properties, with a real tint/shade scale generated off
-them for backgrounds, surfaces, borders, and text rather than the 5 raw
-values used directly as text/background colors. Every pairing that can carry
-text was checked against WCAG AA with an actual relative-luminance contrast
-calculation (`src/branding.py`'s module docstring has the numbers), not
-eyeballed — two concrete things that check caught: raw lilac fails AA as
-small text on both themes' base backgrounds (3.83:1), so it's reserved for
-large text/icons/borders, with a separate darker/brighter `accent-strong`
-token as the text-safe variant; raw emerald fails AA as text on light
-backgrounds (2.57:1), so it's a dot/icon color only — status copy renders in
-`text-primary`/`text-secondary`, never in the raw status color itself.
+them per theme for backgrounds, surfaces, borders, and text rather than the
+4 raw values used directly. Every pairing that can carry text was checked
+against WCAG AA with an actual relative-luminance contrast calculation
+(`src/branding.py`'s module docstring has the numbers), not eyeballed — one
+concrete thing that check caught: raw AI cyan fails AA as small-text/icon
+foreground on light surfaces (2.1–2.4:1), so it's split into `--ai-accent`
+(decorative glow/ring use only) and a separate darker, text-safe
+`--ai-accent-text` (`#0E7490`, 4.7–5.4:1) for anything that actually needs
+to read as a foreground indicator — typing dots, the processing icon, the
+RAG pipeline's step dots.
 
-**Visual language: neumorphism.** Every card is the *same* color as the
-surface it sits on (`--surface-neu`, set equal to `--bg`, not a step away
-from it) — depth comes entirely from a matched light/dark shadow pair
-(`--shadow-raised`), never a different fill color or a hard border. Pressed
-states (inset, same two shadow colors) are used semantically: the chat input
-and expanded accordion panels read as "carved in," the active sidebar nav
-item is pressed rather than just tinted (a nice fit — "current page" reads
-naturally as "already pushed"), and buttons swap to pressed on `:active` so
-clicking looks like physically depressing them, not just a color change.
-This replaced an earlier glassmorphism pass (translucent panels + a fixed
-gradient-blob background) — the two styles need opposite backgrounds
-(glassmorphism needs something textured to blur against; neumorphism needs
-a flat, uniform base tone for the embossed-shape illusion to read at all),
-so the gradient layer was removed outright when the visual direction
-changed, not just left underneath at lower opacity.
+**Visual language: flat cards, not neumorphism.** Every card is a solid
+fill (`--surface-neu`: white in light mode, `#172033` in dark) separated
+from the page background by a real hairline border plus a single soft,
+low-opacity drop shadow — restrained "premium SaaS" chrome rather than the
+project's earlier embossed neumorphic surfaces (same-color card + matched
+light/dark shadow pair standing in for a border). The AI message bubble
+gets its own distinct fill (`--ai-surface`: light blue in light mode, the
+same elevated navy as other cards in dark mode) so it reads as a
+purpose-built AI surface rather than a generic card. A very subtle, static
+radial-gradient wash in the brand blue (upper-right) and cyan (lower-left)
+sits behind the page as ambient lighting — large blur, low opacity, no
+motion — rather than a visible decorative blob.
 
-Typography pairs a serif display face (Fraunces, used only for the "Orchis"
-wordmark) with Space Grotesk for headings/numerals and Inter for body text,
-on a 12/14/16/20/24/32 type scale with tightening letter-spacing on larger
-sizes. Motion is transform/opacity only everywhere (never
+Typography pairs a geometric sans (Space Grotesk, standing in for Futura —
+not web-licensed here — on the "Orchis" wordmark and headings) with Inter
+for body/UI text (standing in for Proxima Nova), plus Playfair Display used
+sparingly as an italic accent (standing in for Luxomona) on the tagline
+only, on a 12/14/16/20/24/32 type scale with tightening letter-spacing on
+larger sizes. Motion is transform/opacity only everywhere (never
 `width`/`height`/`top`/`left`, which forces layout instead of just
 compositing a GPU layer) — entrances are `ease-out`, `prefers-reduced-motion`
 is respected globally, and CSS-only animations do real work rather than
