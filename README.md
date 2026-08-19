@@ -1,5 +1,7 @@
 # Orchis — AI Customer Support Agent (RAG)
 
+Built by [Bilal Ahmed](https://dev-bilalahmed.vercel.app/) — AI Engineer & Web Developer.
+
 A retrieval-augmented generation (RAG) customer support agent that answers
 questions grounded strictly in your own documentation (PDF/text/Markdown).
 Built with LangChain, ChromaDB, a cross-encoder reranker, and a
